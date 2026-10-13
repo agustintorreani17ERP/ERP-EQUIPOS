@@ -4,7 +4,7 @@
  * controles y esquemas de datos del sistema Access VBA.
  */
 
-// Entidad Maquinaria / Equipo (Form_AMAQUINAS, Form_2011AG, Form_2012)
+// Entidad Maquinaria / Equipo (Form_AMAQUINAS, Form_2011AG, Form_2012, Formulario MÁQUINAS Y EQUIPOS)
 export interface Machine {
   id: string;
   codmaq: string; // [CODMAQ]
@@ -18,6 +18,120 @@ export interface Machine {
   ubicacionActual: string;
   ultimoServicioHoras: number;
   tipoMaquinaria: 'RETROEXCAVADORA' | 'FRESADORA' | 'MOTONIVELADORA' | 'TOPADORA' | 'CAMION' | 'OTRO';
+  potenciaHP?: number;
+  chapa?: string;
+  numeroMotor?: string;
+  monitoreoSatelital?: boolean;
+  llevaMantenimiento?: boolean;
+  proximoServicioHoras?: number;
+  vencimientoDinatran?: string;
+  vencimientoMunicipal?: string;
+  // Elementos filtrantes
+  filtros?: {
+    aceiteMotor?: string;
+    combustible1?: string;
+    combustible2?: string;
+    hidraulico1?: string;
+    hidraulico2?: string;
+    airePrimario?: string;
+    aireSecundario?: string;
+    transmision?: string;
+    trampaAgua?: string;
+  };
+  // Capacidades de llenado en litros
+  capacidadesLitros?: {
+    carterMotor?: number;
+    tanqueCombustible?: number;
+    sistemaHidraulico?: number;
+    cajaCambios?: number;
+    diferencial?: number;
+    mandoFinal?: number;
+  };
+}
+
+// Despacho y Consumo de Gasoil y Aceites por Obra (Despachos y Recepciones de Gasoil y Aceites)
+export interface FuelOilDispatch {
+  id: string;
+  fecha: string;
+  codmaq: string;
+  obra: string;
+  horas: number;
+  difK: number;
+  kms?: number;
+  difKm?: number;
+  nroRemito: string;
+  gasoilLitros: number;
+  aceite15W40?: number;
+  aceite80W90?: number;
+  aceite10?: number;
+  aceiteTO4?: number;
+  aceiteATF?: number;
+  aceiteHidraulico68?: number;
+  grasaKg?: number;
+  despachadoPor: string;
+  chofer: string;
+  descripcion: string;
+  consumoPorHora?: number;
+  consumoPorKm?: number;
+  proveedor?: string;
+}
+
+// Entrada de Materiales & Insumos de Taller (Formulario ENTRADA DE MATERIALES)
+export interface MaterialEntry {
+  id: string;
+  fecha: string;
+  nroRemision: string;
+  proveedor: string;
+  obraDestino: string;
+  codmaq?: string;
+  despachadoPor: string;
+  chofer?: string;
+  chapa?: string;
+  observaciones?: string;
+  // Cantidades recibidas
+  gasoilLitros?: number;
+  aceite15W40?: number;
+  aceite80W90?: number;
+  aceiteSAE10?: number;
+  aceiteSAE30?: number;
+  aceiteSAE50?: number;
+  aceiteTO4?: number;
+  aceiteATF?: number;
+  aceiteHidraulico68?: number;
+  grasaKg?: number;
+  cementoBolsas?: number;
+  calBolsas?: number;
+  varillasHierro?: number;
+  otrosDetalles?: string;
+}
+
+// Orden de Servicio y Mantenimiento con Horas Ideales vs Reales (Formulario ORDEN DE SERVICIO)
+export interface MaintenanceOrder {
+  id: number;
+  nroOrden: string; // ej: "4996"
+  codmaq: string;
+  tipoServicio: '250_HS' | '500_HS' | '1000_HS' | '2000_HS' | '5000_KMS' | 'EXTRAORDINARIO';
+  fechaEmision: string;
+  fechaEfectuado?: string;
+  obraRealizado: string; // ej: "CAMPICHUELO", "CANTERA AGUAPETY", "TALLER CENTRAL"
+  horasIdeal: number;
+  horasActual: number;
+  horasReal: number;
+  horasFaltando: number;
+  horasDiferencia: number; // Real - Ideal
+  proximoMantenimientoHoras: number;
+  proximoTipoMantenimiento: string;
+  tecnicoResponsable: string;
+  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'APROBADO';
+  costoEstimado: number;
+  checklist: MaintenanceCheckItem[];
+  repuestosUtilizados: {
+    articuloCodigo: string;
+    descripcion: string;
+    cantidad: number;
+    unidad?: string;
+  }[];
+  observaciones: string;
 }
 
 // Lectura de Horómetro / Totalizador (Form_A)
@@ -95,9 +209,10 @@ export interface MaterialOrder {
 
 // Catálogo de Artículos / Repuestos (Form_EDITAR ARTICULO, Form_EDITAR ART CON CALCULO)
 export interface Article {
+  id?: string;
   codigo: string; // [ARTICULO]
   descripcion: string;
-  categoria: 'REPUESTOS' | 'LUBRICANTES' | 'HERRAMIENTAS' | 'CONSUMIBLES' | 'SEGURIDAD';
+  categoria: 'REPUESTOS' | 'LUBRICANTES' | 'HERRAMIENTAS' | 'CONSUMIBLES' | 'SEGURIDAD' | 'FILTROS' | 'CORREAS' | 'DESGASTE' | 'ELECTRICIDAD' | 'FERRETERIA' | 'MANGUERAS' | 'RODAMIENTOS' | 'OTROS' | string;
   stockActual: number;
   stockMinimo: number;
   unidad: 'U' | 'L' | 'KG' | 'M' | 'JUEGO';
@@ -155,6 +270,8 @@ export interface SupplierAccount {
   ultimoPagoFecha?: string;
 }
 
+export type Supplier = SupplierAccount;
+
 export interface FundRequest {
   id: string;
   numeroSolicitud: string; // SF #
@@ -177,4 +294,41 @@ export interface ReportDefinition {
   description: string;
   category: 'MAQUINARIA' | 'PEDIDOS' | 'TESORERIA' | 'SERVICIOS';
   format: 'PREVIEW' | 'PRINT' | 'PDF' | 'EMAIL';
+}
+
+// Entidades adicionales para compatibilidad total con planillas de Access / Excel
+export interface Worksite {
+  id: string;
+  idObra: string;
+  nombreObra: string;
+  ubicacion?: string;
+  responsable?: string;
+  estado?: 'ACTIVA' | 'FINALIZADA' | 'PAUSADA';
+}
+
+export interface AccountItem {
+  id: string;
+  codigoCuenta: string;
+  nombre: string;
+  tipo: string;
+  saldo?: number;
+}
+
+export interface DocTypeItem {
+  id: string;
+  codigo: string;
+  descripcion: string;
+  letra?: string;
+}
+
+export interface StockMovementItem {
+  id: string;
+  fecha: string;
+  articuloCodigo: string;
+  descripcion?: string;
+  tipoMovimiento: 'ENTRADA' | 'SALIDA';
+  cantidad: number;
+  codmaqDestino?: string;
+  nroRemito?: string;
+  observaciones?: string;
 }

@@ -129,7 +129,7 @@ export const ReportViewerModal: React.FC<ReportViewerModalProps> = ({
                 <p className="text-slate-400 text-[10px]">Migración de Microsoft Access v7.0 a Web API</p>
               </div>
               <div className="text-right">
-                <div className="inline-block bg-slate-900 text-white px-2 py-1 font-mono font-bold rounded-xs text-[11px]">
+                <div className="inline-block bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 font-mono font-bold rounded-md text-[11px]">
                   INFORME OFICIAL
                 </div>
                 <p className="text-[11px] font-semibold text-slate-700 mt-1">DOC: {reportName}</p>

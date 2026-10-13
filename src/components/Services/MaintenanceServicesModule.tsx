@@ -250,7 +250,7 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-mono text-xs bg-slate-900 text-white px-2 py-0.5 rounded-sm font-bold">
+                  <span className="font-mono text-xs bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-md font-bold">
                     ID #{selectedService.id}
                   </span>
                   <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">

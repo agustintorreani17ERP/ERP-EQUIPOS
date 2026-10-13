@@ -10,8 +10,11 @@ import {
   DailyReport,
   DispatchVoucher,
   EquipmentServiceRecord,
+  FuelOilDispatch,
   FundRequest,
   Machine,
+  MaintenanceOrder,
+  MaterialEntry,
   MaterialOrder,
   PettyCashExpense,
   SupplierAccount,
@@ -20,7 +23,7 @@ import {
 import { calculateHourDifference, calculateOrderTotals } from '../utils/legacyCalculations';
 
 // Claves de almacenamiento local para persistencia entre recargas
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   MACHINES: 'erp_access_machines',
   TOTALIZERS: 'erp_access_totalizers',
   SERVICES: 'erp_access_services',
@@ -31,7 +34,22 @@ const STORAGE_KEYS = {
   PETTY_CASH: 'erp_access_petty_cash',
   SUPPLIERS: 'erp_access_suppliers',
   FUND_REQUESTS: 'erp_access_fund_requests',
-};
+  FUEL_DISPATCHES: 'erp_access_fuel_dispatches',
+  MATERIAL_ENTRIES: 'erp_access_material_entries',
+  MAINTENANCE_ORDERS: 'erp_access_maintenance_orders',
+} as const;
+
+export type StorageTableKey =
+  | 'MACHINES'
+  | 'TOTALIZERS'
+  | 'SERVICES'
+  | 'ORDERS'
+  | 'ARTICLES'
+  | 'DAILY_REPORTS'
+  | 'DISPATCHES'
+  | 'PETTY_CASH'
+  | 'SUPPLIERS'
+  | 'FUND_REQUESTS';
 
 // Semilla inicial extraída de los modelos y nombres de reportes de Access
 const INITIAL_MACHINES: Machine[] = [
@@ -104,6 +122,299 @@ const INITIAL_MACHINES: Machine[] = [
     ubicacionActual: 'Transporte de Áridos Tramo 3',
     ultimoServicioHoras: 4800,
     tipoMaquinaria: 'CAMION',
+  },
+  {
+    id: 'm-466301',
+    codmaq: '46 63 01',
+    descripcion: 'Carro Perforador Atlas Copco ECM-585',
+    marca: 'Atlas Copco',
+    modelo: 'ECM-585',
+    numeroSerie: 'AC585-2014',
+    anio: 2014,
+    horasActuales: 10866.0,
+    estado: 'OPERATIVA',
+    ubicacionActual: 'CANTERA AGUAPETY',
+    ultimoServicioHoras: 10000,
+    proximoServicioHoras: 11000,
+    tipoMaquinaria: 'OTRO',
+    chapa: 'BKS 421',
+    potenciaHP: 225,
+    filtros: {
+      aceiteMotor: 'LF-3000 / 1R-0716',
+      combustible1: 'FS-1212',
+      combustible2: 'FF-5052',
+      hidraulico1: 'HF-6510',
+      airePrimario: 'AF-25125',
+      aireSecundario: 'AF-25126',
+    },
+    capacidadesLitros: {
+      carterMotor: 28,
+      tanqueCombustible: 380,
+      sistemaHidraulico: 190,
+      cajaCambios: 35,
+    },
+  },
+  {
+    id: 'm-036703',
+    codmaq: '03 67 03',
+    descripcion: 'Minicargador Caterpillar 236B',
+    marca: 'Caterpillar',
+    modelo: '236B',
+    numeroSerie: 'CAT0236B789',
+    anio: 2012,
+    horasActuales: 6420.0,
+    estado: 'OPERATIVA',
+    ubicacionActual: 'CAMPICHUELO',
+    ultimoServicioHoras: 6000,
+    proximoServicioHoras: 6500,
+    tipoMaquinaria: 'OTRO',
+    chapa: 'AA 920 KL',
+    potenciaHP: 74,
+    filtros: {
+      aceiteMotor: '1R-0739',
+      combustible1: '1R-0793',
+      hidraulico1: '1G-8878',
+      airePrimario: '110-6326',
+    },
+    capacidadesLitros: {
+      carterMotor: 10,
+      tanqueCombustible: 90,
+      sistemaHidraulico: 55,
+    },
+  },
+];
+
+export const INITIAL_FUEL_DISPATCHES: FuelOilDispatch[] = [
+  {
+    id: 'disp-1',
+    fecha: '2024-03-08',
+    codmaq: '46 63 01',
+    obra: 'CANTERA AGUAPETY',
+    horas: 10866.0,
+    difK: 8.5,
+    kms: 0,
+    nroRemito: 'REM-001248',
+    gasoilLitros: 160,
+    aceite15W40: 4,
+    aceite80W90: 0,
+    aceite10: 0,
+    aceiteTO4: 2,
+    aceiteATF: 0,
+    aceiteHidraulico68: 5,
+    grasaKg: 2,
+    despachadoPor: 'TALLER CENTRAL',
+    chofer: 'Mendoza Ariel',
+    descripcion: 'LLENO + REPO ACEITE MOTOR',
+    consumoPorHora: 18.8,
+    proveedor: 'PETROPAR',
+  },
+  {
+    id: 'disp-2',
+    fecha: '2024-03-09',
+    codmaq: '03 67 03',
+    obra: 'CAMPICHUELO',
+    horas: 6420.0,
+    difK: 7.0,
+    kms: 0,
+    nroRemito: 'REM-001252',
+    gasoilLitros: 85,
+    aceite15W40: 0,
+    aceite80W90: 0,
+    aceite10: 0,
+    aceiteTO4: 0,
+    aceiteATF: 0,
+    aceiteHidraulico68: 0,
+    grasaKg: 1,
+    despachadoPor: 'CISTERNA MOVIL 02',
+    chofer: 'Benitez Carlos',
+    descripcion: 'CARGA GASOIL TRABAJO VIAL',
+    consumoPorHora: 12.1,
+    proveedor: 'PETROPAR',
+  },
+  {
+    id: 'disp-3',
+    fecha: '2024-03-07',
+    codmaq: 'CAT-416',
+    obra: 'RUTA 9 KM 42',
+    horas: 4820.5,
+    difK: 8.5,
+    kms: 0,
+    nroRemito: 'REM-001240',
+    gasoilLitros: 95,
+    aceite15W40: 2,
+    aceite80W90: 0,
+    aceite10: 0,
+    aceiteTO4: 0,
+    aceiteATF: 0,
+    aceiteHidraulico68: 0,
+    grasaKg: 1.5,
+    despachadoPor: 'TALLER CENTRAL',
+    chofer: 'Gómez Raúl',
+    descripcion: 'LLENO + ENGRASE',
+    consumoPorHora: 11.2,
+    proveedor: 'SHELL OBRA',
+  },
+  {
+    id: 'disp-4',
+    fecha: '2024-03-06',
+    codmaq: 'FREZ-01',
+    obra: 'TRAVESIA OVIEDO',
+    horas: 3125.0,
+    difK: 25.0,
+    kms: 0,
+    nroRemito: 'REM-001235',
+    gasoilLitros: 320,
+    aceite15W40: 5,
+    aceite80W90: 0,
+    aceite10: 0,
+    aceiteTO4: 0,
+    aceiteATF: 0,
+    aceiteHidraulico68: 10,
+    grasaKg: 3,
+    despachadoPor: 'CISTERNA MOVIL 01',
+    chofer: 'Martínez Carlos',
+    descripcion: 'FRESADO CONTINUO TRAMO A',
+    consumoPorHora: 12.8,
+    proveedor: 'PETROPAR',
+  },
+  {
+    id: 'disp-5',
+    fecha: '2024-03-05',
+    codmaq: 'CAT-140G',
+    obra: 'CANTERA AGUAPETY',
+    horas: 6940.0,
+    difK: 8.0,
+    kms: 0,
+    nroRemito: 'REM-001229',
+    gasoilLitros: 110,
+    aceite15W40: 0,
+    aceite80W90: 2,
+    aceite10: 0,
+    aceiteTO4: 4,
+    aceiteATF: 0,
+    aceiteHidraulico68: 0,
+    grasaKg: 2,
+    despachadoPor: 'TALLER CENTRAL',
+    chofer: 'Almada Esteban',
+    descripcion: 'NIVELACION ACCESO CANTERA',
+    consumoPorHora: 13.7,
+    proveedor: 'SHELL OBRA',
+  },
+];
+
+export const INITIAL_MATERIAL_ENTRIES: MaterialEntry[] = [
+  {
+    id: 'mat-ent-1',
+    fecha: '2024-03-04',
+    nroRemision: 'RE-88921',
+    proveedor: 'LUBRICANTES Y COMBUSTIBLES DEL ESTE',
+    obraDestino: 'TALLER CENTRAL',
+    despachadoPor: 'DISTRIBUIDORA YPF/MOBIL',
+    chofer: 'Ramírez Jorge',
+    chapa: 'AG 441 TT',
+    observaciones: 'Descarga completa de tambores y baldes en aceitería',
+    gasoilLitros: 5000,
+    aceite15W40: 400,
+    aceite80W90: 100,
+    aceiteSAE10: 80,
+    aceiteSAE30: 60,
+    aceiteSAE50: 40,
+    aceiteTO4: 200,
+    aceiteATF: 40,
+    aceiteHidraulico68: 600,
+    grasaKg: 150,
+  },
+  {
+    id: 'mat-ent-2',
+    fecha: '2024-03-06',
+    nroRemision: 'RE-88950',
+    proveedor: 'CEMENTERA NACIONAL',
+    obraDestino: 'CAMPICHUELO',
+    despachadoPor: 'TRANSPORTE LOGISTICA NORTE',
+    chofer: 'Vargas Pedro',
+    chapa: 'AC 712 MN',
+    observaciones: 'Entrega para alcantarillado y cabezales',
+    cementoBolsas: 350,
+    calBolsas: 120,
+    varillasHierro: 80,
+  },
+  {
+    id: 'mat-ent-3',
+    fecha: '2024-03-07',
+    nroRemision: 'RE-88965',
+    proveedor: 'PETROPAR COMBUSTIBLES',
+    obraDestino: 'CANTERA AGUAPETY',
+    despachadoPor: 'PLANTA SAN LORENZO',
+    chofer: 'Morínigo Silvio',
+    chapa: 'BAE 309',
+    observaciones: 'Descarga directa a tanque cisterna estacionario 10.000L',
+    gasoilLitros: 8000,
+    aceite15W40: 60,
+    grasaKg: 50,
+  },
+];
+
+export const INITIAL_MAINTENANCE_ORDERS: MaintenanceOrder[] = [
+  {
+    id: 4996,
+    nroOrden: '4996',
+    codmaq: '46 63 01',
+    tipoServicio: '5000_KMS',
+    fechaEmision: '2024-03-15',
+    fechaEfectuado: '2024-03-19',
+    obraRealizado: 'CAMPICHUELO',
+    horasIdeal: 13767,
+    horasActual: 13725,
+    horasReal: 13863,
+    horasFaltando: 42,
+    horasDiferencia: -96,
+    proximoMantenimientoHoras: 14267,
+    proximoTipoMantenimiento: '5.000 KMS / 500 HS',
+    tecnicoResponsable: 'Taller Central / Ing. Bustamante',
+    costoEstimado: 480000,
+    estado: 'COMPLETADO',
+    checklist: [
+      { id: 'mo-c1', descripcion: 'Cambio de aceite de motor y filtros primario/secundario', categoria: 'MOTOR', completado: true },
+      { id: 'mo-c2', descripcion: 'Drenaje de agua y sedimentos trampa de combustible', categoria: 'MOTOR', completado: true },
+      { id: 'mo-c3', descripcion: 'Revisión y reemplazo de filtros hidráulicos de retorno', categoria: 'HIDRAULICO', completado: true },
+      { id: 'mo-c4', descripcion: 'Inspección de zapatas, rodillos de oruga y tensión', categoria: 'TRANSMISION', completado: true },
+      { id: 'mo-c5', descripcion: 'Engrase completo de columna de avance y cabezal de perforación', categoria: 'ESTRUCTURA', completado: true },
+    ],
+    repuestosUtilizados: [
+      { articuloCodigo: 'FILT-ACE-01', descripcion: 'Filtro Aceite Motor CAT 1R-0716', cantidad: 2, unidad: 'U' },
+      { articuloCodigo: 'ACE-15W40', descripcion: 'Aceite Motor 15W40 (L)', cantidad: 28, unidad: 'L' },
+      { articuloCodigo: 'FILT-GAS-02', descripcion: 'Filtro Combustible Separador FS-1212', cantidad: 1, unidad: 'U' },
+    ],
+    observaciones: 'Servicio efectuado según protocolo. Equipo liberado para trabajo en Cantera Aguapety.',
+  },
+  {
+    id: 4997,
+    nroOrden: '4997',
+    codmaq: '03 67 03',
+    tipoServicio: '500_HS',
+    fechaEmision: '2024-03-10',
+    fechaEfectuado: '2024-03-11',
+    obraRealizado: 'CAMPICHUELO',
+    horasIdeal: 6500,
+    horasActual: 6420,
+    horasReal: 6420,
+    horasFaltando: 80,
+    horasDiferencia: 80,
+    proximoMantenimientoHoras: 7000,
+    proximoTipoMantenimiento: '1000 HS',
+    tecnicoResponsable: 'Mecánico Fernández',
+    costoEstimado: 220000,
+    estado: 'COMPLETADO',
+    checklist: [
+      { id: 'mo-c6', descripcion: 'Cambio de aceite de motor y filtro 1R-0739', categoria: 'MOTOR', completado: true },
+      { id: 'mo-c7', descripcion: 'Chequeo de mangueras hidráulicas de brazos', categoria: 'HIDRAULICO', completado: true },
+      { id: 'mo-c8', descripcion: 'Engrase pasadores de balde', categoria: 'ESTRUCTURA', completado: true },
+    ],
+    repuestosUtilizados: [
+      { articuloCodigo: 'FILT-ACE-01', descripcion: 'Filtro Aceite 1R-0739', cantidad: 1, unidad: 'U' },
+      { articuloCodigo: 'ACE-15W40', descripcion: 'Aceite 15W40', cantidad: 10, unidad: 'L' },
+    ],
+    observaciones: 'Mantenimiento preventivo completado en fecha.',
   },
 ];
 
@@ -432,11 +743,15 @@ const INITIAL_FUND_REQUESTS: FundRequest[] = [
   },
 ];
 
-// Helper para leer/escribir en localStorage con fallback
+// Helper para leer/escribir en localStorage con soporte estricto de tablas vacías ([])
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
     const data = localStorage.getItem(key);
-    if (!data) return fallback;
+    if (data === null) {
+      // Primera vez: inicializar en localStorage con la plantilla
+      localStorage.setItem(key, JSON.stringify(fallback));
+      return fallback;
+    }
     return JSON.parse(data) as T;
   } catch {
     return fallback;
@@ -453,6 +768,158 @@ function saveToStorage<T>(key: string, data: T): void {
 
 // Simulador de delay de red REST
 const mockLatency = (ms: number = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Normalizador tolerante a fallos para datos importados desde Access (TXT/CSV/JSON).
+ * Garantiza que propiedades críticas nunca sean undefined, null o NaN.
+ */
+export function normalizeRecordForTable(tableKey: StorageTableKey, raw: any, index: number): any {
+  if (!raw || typeof raw !== 'object') return raw;
+
+  // Mapa de claves en minúsculas y sin caracteres especiales
+  const normMap: Record<string, any> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const cleanK = k
+      .replace(/[\[\]"']/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[_\s-]/g, '');
+    normMap[cleanK] = v;
+  }
+
+  const get = (...keys: string[]): any => {
+    for (const key of keys) {
+      const cleanTarget = key.toLowerCase().replace(/[_\s-]/g, '');
+      if (normMap[cleanTarget] !== undefined && normMap[cleanTarget] !== null && normMap[cleanTarget] !== '') {
+        return normMap[cleanTarget];
+      }
+      if (raw[key] !== undefined && raw[key] !== null && raw[key] !== '') {
+        return raw[key];
+      }
+    }
+    return undefined;
+  };
+
+  const toNum = (val: any, fallback: number = 0): number => {
+    if (val === undefined || val === null || val === '') return fallback;
+    if (typeof val === 'number') return isNaN(val) ? fallback : val;
+    const str = String(val).replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+    const parsed = parseFloat(str);
+    return isNaN(parsed) ? fallback : parsed;
+  };
+
+  const toStr = (val: any, fallback: string = ''): string => {
+    if (val === undefined || val === null) return fallback;
+    return String(val).trim();
+  };
+
+  if (tableKey === 'MACHINES') {
+    const codmaq = toStr(
+      get('codmaq', 'codigo', 'código', 'cod', 'equipo', 'idmaquina', 'maquina', 'máquina', 'interno', 'nroequipo', 'nrointerno', 'id'),
+      `MAQ-${index + 1}`
+    ).toUpperCase();
+
+    const descripcion = toStr(
+      get('descripcion', 'descripción', 'detalle', 'nombre', 'denominacion', 'denominación', 'equipodesc'),
+      `Equipo ${codmaq}`
+    );
+
+    const marca = toStr(get('marca', 'fabricante', 'brand'), 'Genérica');
+    const modelo = toStr(get('modelo', 'model'), 'Estándar');
+    const numeroSerie = toStr(get('numeroserie', 'numero_serie', 'serie', 'chasis', 'serial'), 'S/N');
+    const anio = toNum(get('anio', 'año', 'ano', 'year', 'modeloaño'), 2020);
+    const horasActuales = toNum(get('horasactuales', 'horas', 'horometro', 'horómetro', 'hs', 'hsactuales', 'lectura'), 0);
+    const ultimoServicioHoras = toNum(get('ultimoserviciohoras', 'ultimoservicio', 'ultimomantenimiento'), 0);
+    const ubicacionActual = toStr(get('ubicacionactual', 'ubicacion', 'ubicación', 'lugar', 'obra', 'destino', 'base'), 'Base Central');
+
+    let estado = toStr(get('estado', 'situacion', 'condicion', 'status'), 'OPERATIVA').toUpperCase();
+    if (!['OPERATIVA', 'EN_MANTENIMIENTO', 'EN_REPARACION', 'BAJA'].includes(estado)) {
+      if (estado.includes('MANT') || estado.includes('REV')) estado = 'EN_MANTENIMIENTO';
+      else if (estado.includes('REP') || estado.includes('ROT') || estado.includes('TALLER') || estado.includes('PARADO')) estado = 'EN_REPARACION';
+      else if (estado.includes('BAJ') || estado.includes('DES')) estado = 'BAJA';
+      else estado = 'OPERATIVA';
+    }
+
+    let tipoMaquinaria = toStr(get('tipomaquinaria', 'tipo', 'categoria', 'rubro'), 'OTRO').toUpperCase();
+    if (tipoMaquinaria.includes('RETRO')) tipoMaquinaria = 'RETROEXCAVADORA';
+    else if (tipoMaquinaria.includes('FRES')) tipoMaquinaria = 'FRESADORA';
+    else if (tipoMaquinaria.includes('MOTO') || tipoMaquinaria.includes('NIVEL')) tipoMaquinaria = 'MOTONIVELADORA';
+    else if (tipoMaquinaria.includes('TOP')) tipoMaquinaria = 'TOPADORA';
+    else if (tipoMaquinaria.includes('CAM')) tipoMaquinaria = 'CAMION';
+    else tipoMaquinaria = 'OTRO';
+
+    const potenciaHP = toNum(get('potenciahp', 'potencia', 'hp', 'caballos'), 0);
+
+    return {
+      id: toStr(raw.id, `maq-${Date.now()}-${index}`),
+      codmaq,
+      descripcion,
+      marca,
+      modelo,
+      numeroSerie,
+      anio,
+      horasActuales,
+      ultimoServicioHoras,
+      ubicacionActual,
+      estado: estado as any,
+      tipoMaquinaria: tipoMaquinaria as any,
+      potenciaHP,
+    };
+  }
+
+  if (tableKey === 'TOTALIZERS') {
+    return {
+      id: toStr(raw.id, `tot-${Date.now()}-${index}`),
+      codmaq: toStr(get('codmaq', 'codigo', 'equipo'), 'CAT-416').toUpperCase(),
+      fecha: toStr(get('fecha', 'dia', 'fec'), new Date().toISOString().split('T')[0]),
+      horas: toNum(get('horas', 'horometro', 'hs', 'lectura'), 0),
+      difK: toNum(get('difk', 'diferencia', 'dif'), 0),
+      litrosGasoil: toNum(get('litrosgasoil', 'gasoil', 'combustible'), 0),
+      litrosAceite: toNum(get('litrosaceite', 'aceite', 'ac10'), 0),
+      chofer: toStr(get('chofer', 'operador', 'conductor'), 'Operador'),
+      observaciones: toStr(get('observaciones', 'observacion', 'detalle', 'notas'), 'Carga de totalizador'),
+    };
+  }
+
+  if (tableKey === 'ORDERS') {
+    const subtotal = toNum(get('subtotal', 'neto', 'importe'), 0);
+    const impuestos = toNum(get('impuestos', 'iva'), Math.round(subtotal * 0.21));
+    const total = toNum(get('total'), subtotal + impuestos);
+    return {
+      id: toStr(raw.id, `ord-${Date.now()}-${index}`),
+      pedido: toStr(get('pedido', 'numeropedido', 'nro_pedido', 'id'), `PED-${Date.now()}-${index}`),
+      fecha: toStr(get('fecha'), new Date().toISOString().split('T')[0]),
+      solicitante: toStr(get('solicitante', 'responsable', 'usuario'), 'Encargado'),
+      departamento: toStr(get('departamento', 'area', 'sector'), 'TALLER CENTRAL'),
+      codmaqDestino: toStr(get('codmaqdestino', 'codmaq', 'equipo', 'maquina'), 'CAT-416'),
+      prioridad: (get('prioridad') || 'NORMAL').toUpperCase(),
+      estado: (get('estado') || 'PENDIENTE').toUpperCase(),
+      subtotal,
+      impuestos,
+      total,
+      items: raw.items || [],
+    };
+  }
+
+  if (tableKey === 'ARTICLES') {
+    return {
+      id: toStr(raw.id, `art-${Date.now()}-${index}`),
+      codigo: toStr(get('codigo', 'código', 'art', 'id'), `ART-${index + 1}`).toUpperCase(),
+      descripcion: toStr(get('descripcion', 'descripción', 'detalle', 'nombre'), 'Artículo General'),
+      categoria: toStr(get('categoria', 'categoría', 'rubro'), 'REPUESTOS'),
+      precioUnitario: toNum(get('preciounitario', 'precio', 'costo'), 0),
+      unidad: toStr(get('unidad', 'medida'), 'U'),
+      stockActual: toNum(get('stockactual', 'stock', 'cantidad'), 0),
+      stockMinimo: toNum(get('stockminimo', 'minimo'), 0),
+      ubicacionDeposito: toStr(get('ubicaciondeposito', 'ubicacion', 'deposito'), 'Depósito Central'),
+    };
+  }
+
+  if (!raw.id) {
+    raw.id = `reg-${Date.now()}-${index}`;
+  }
+  return raw;
+}
 
 /**
  * =========================================================================
@@ -492,7 +959,17 @@ export const ErpApi = {
     return machineData;
   },
 
-  // --- MÓDULO HORÓMETRO / TOTALIZADOR (Form_A) ---
+  async deleteMachine(idOrCodmaq: string): Promise<boolean> {
+    await mockLatency();
+    const machines = await this.getMachines();
+    const filtered = machines.filter(
+      (m) => m.id !== idOrCodmaq && m.codmaq.toLowerCase() !== idOrCodmaq.toLowerCase()
+    );
+    saveToStorage(STORAGE_KEYS.MACHINES, filtered);
+    return true;
+  },
+
+  // --- MÓDULO HORÓMETRO / TOTALIZADOR ---
   async getTotalizers(codmaq?: string): Promise<TotalizerReading[]> {
     // TODO: Fetch from /api/totalizers?codmaq=${codmaq}
     await mockLatency();
@@ -541,7 +1018,19 @@ export const ErpApi = {
     return newReading;
   },
 
-  // --- MÓDULO SERVICIOS DE EQUIPOS (Form_CAT 416 2000HS, Form_FREZADORA, etc.) ---
+  async saveTotalizerReading(reading: TotalizerReading): Promise<TotalizerReading> {
+    return this.addTotalizerReading(reading);
+  },
+
+  async deleteTotalizer(id: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getTotalizers();
+    const updated = list.filter((r) => r.id !== id);
+    saveToStorage(STORAGE_KEYS.TOTALIZERS, updated);
+    return true;
+  },
+
+  // --- MÓDULO SERVICIOS DE EQUIPOS ---
   async getServiceRecords(codmaq?: string): Promise<EquipmentServiceRecord[]> {
     // TODO: Fetch from /api/services
     await mockLatency();
@@ -576,7 +1065,15 @@ export const ErpApi = {
     return record;
   },
 
-  // --- MÓDULO PEDIDOS DE MATERIALES Y ARTÍCULOS (Form_AGREGAR PEDIDO, Form_EDITAR PEDIDO) ---
+  async deleteServiceRecord(id: number | string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getServiceRecords();
+    const updated = list.filter((s) => String(s.id) !== String(id));
+    saveToStorage(STORAGE_KEYS.SERVICES, updated);
+    return true;
+  },
+
+  // --- MÓDULO PEDIDOS DE MATERIALES Y ARTÍCULOS ---
   async getOrders(): Promise<MaterialOrder[]> {
     // TODO: Fetch from /api/orders
     await mockLatency();
@@ -615,6 +1112,14 @@ export const ErpApi = {
     return orderWithTotals;
   },
 
+  async deleteOrder(pedidoOrId: string): Promise<boolean> {
+    await mockLatency();
+    const orders = await this.getOrders();
+    const updated = orders.filter((o) => o.id !== pedidoOrId && o.pedido.toLowerCase() !== pedidoOrId.toLowerCase());
+    saveToStorage(STORAGE_KEYS.ORDERS, updated);
+    return true;
+  },
+
   async getArticles(): Promise<Article[]> {
     // TODO: Fetch from /api/articles
     await mockLatency();
@@ -639,7 +1144,15 @@ export const ErpApi = {
     return article;
   },
 
-  // --- MÓDULO PARTES DIARIOS Y ENVÍOS (Form_PARTE DIARIO, Form_INFORME DIARIO, Form_ENVIO) ---
+  async deleteArticle(codigo: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getArticles();
+    const updated = list.filter((a) => a.codigo.toLowerCase() !== codigo.toLowerCase());
+    saveToStorage(STORAGE_KEYS.ARTICLES, updated);
+    return true;
+  },
+
+  // --- MÓDULO PARTES DIARIOS Y ENVÍOS ---
   async getDailyReports(choferFilter?: string): Promise<DailyReport[]> {
     // TODO: Fetch from /api/daily-reports
     await mockLatency();
@@ -667,13 +1180,29 @@ export const ErpApi = {
     return newReport;
   },
 
+  async deleteDailyReport(id: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getDailyReports();
+    const updated = list.filter((r) => r.id !== id);
+    saveToStorage(STORAGE_KEYS.DAILY_REPORTS, updated);
+    return true;
+  },
+
   async getDispatches(): Promise<DispatchVoucher[]> {
     // TODO: Fetch from /api/dispatches
     await mockLatency();
     return loadFromStorage(STORAGE_KEYS.DISPATCHES, INITIAL_DISPATCHES);
   },
 
-  // --- MÓDULO TESORERÍA / FINANZAS (Form_CAJA CHICA, Form_PROVEEDORES A PAGAR, Form_SFONDOS) ---
+  async deleteDispatch(numeroEnvioOrId: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getDispatches();
+    const updated = list.filter((d) => d.id !== numeroEnvioOrId && d.numeroEnvio !== numeroEnvioOrId);
+    saveToStorage(STORAGE_KEYS.DISPATCHES, updated);
+    return true;
+  },
+
+  // --- MÓDULO TESORERÍA / FINANZAS ---
   async getPettyCashExpenses(): Promise<PettyCashExpense[]> {
     // TODO: Fetch from /api/petty-cash
     await mockLatency();
@@ -692,10 +1221,49 @@ export const ErpApi = {
     return newRecord;
   },
 
+  async savePettyCashExpense(expense: PettyCashExpense): Promise<PettyCashExpense> {
+    return this.addPettyCashExpense(expense);
+  },
+
+  async deletePettyCashExpense(id: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getPettyCashExpenses();
+    const updated = list.filter((e) => e.id !== id);
+    saveToStorage(STORAGE_KEYS.PETTY_CASH, updated);
+    return true;
+  },
+
   async getSuppliers(): Promise<SupplierAccount[]> {
     // TODO: Fetch from /api/suppliers
     await mockLatency();
     return loadFromStorage(STORAGE_KEYS.SUPPLIERS, INITIAL_SUPPLIERS);
+  },
+
+  async saveSupplier(supplier: SupplierAccount): Promise<SupplierAccount> {
+    await mockLatency();
+    const list = await this.getSuppliers();
+    const index = list.findIndex(
+      (s) => s.id === supplier.id || s.codigoProveedor.toLowerCase() === supplier.codigoProveedor.toLowerCase()
+    );
+    let updated: SupplierAccount[];
+    if (index >= 0) {
+      updated = [...list];
+      updated[index] = supplier;
+    } else {
+      updated = [...list, supplier];
+    }
+    saveToStorage(STORAGE_KEYS.SUPPLIERS, updated);
+    return supplier;
+  },
+
+  async deleteSupplier(codigoProveedorOrId: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getSuppliers();
+    const updated = list.filter(
+      (s) => s.id !== codigoProveedorOrId && s.codigoProveedor !== codigoProveedorOrId
+    );
+    saveToStorage(STORAGE_KEYS.SUPPLIERS, updated);
+    return true;
   },
 
   async getFundRequests(options?: {
@@ -738,6 +1306,14 @@ export const ErpApi = {
     return request;
   },
 
+  async deleteFundRequest(idOrNumero: string): Promise<boolean> {
+    await mockLatency();
+    const list = await this.getFundRequests();
+    const updated = list.filter((sf) => sf.id !== idOrNumero && sf.numeroSolicitud !== idOrNumero);
+    saveToStorage(STORAGE_KEYS.FUND_REQUESTS, updated);
+    return true;
+  },
+
   async simulateSendObjectEmail(requestId: string): Promise<{ success: boolean; message: string }> {
     // TODO: POST to /api/fund-requests/${requestId}/send-email (Reemplazo de DoCmd.SendObject acReport, "SF")
     await mockLatency(300);
@@ -750,5 +1326,407 @@ export const ErpApi = {
       success: true,
       message: `Reporte 'SF' enviado exitosamente por correo electrónico a Tesorería / ${target.proveedor}`,
     };
+  },
+
+  // --- MÓDULO TALLER: DESPACHOS Y CONSUMOS DE GASOIL & ACEITES ---
+  async getFuelDispatches(filters?: {
+    obra?: string;
+    codmaq?: string;
+    fechaDesde?: string;
+    fechaHasta?: string;
+  }): Promise<FuelOilDispatch[]> {
+    await mockLatency(50);
+    let list = loadFromStorage<FuelOilDispatch[]>(STORAGE_KEYS.FUEL_DISPATCHES, INITIAL_FUEL_DISPATCHES);
+    if (filters?.obra && filters.obra !== 'TODAS') {
+      list = list.filter((d) => d.obra.toLowerCase() === filters.obra!.toLowerCase());
+    }
+    if (filters?.codmaq && filters.codmaq.trim()) {
+      const q = filters.codmaq.toLowerCase().trim();
+      list = list.filter((d) => d.codmaq.toLowerCase().includes(q));
+    }
+    if (filters?.fechaDesde) {
+      list = list.filter((d) => d.fecha >= filters.fechaDesde!);
+    }
+    if (filters?.fechaHasta) {
+      list = list.filter((d) => d.fecha <= filters.fechaHasta!);
+    }
+    return list;
+  },
+
+  async saveFuelDispatch(dispatch: FuelOilDispatch): Promise<FuelOilDispatch> {
+    await mockLatency(100);
+    const list = await this.getFuelDispatches();
+    const index = list.findIndex((d) => d.id === dispatch.id || (d.nroRemito && d.nroRemito === dispatch.nroRemito));
+    let updated: FuelOilDispatch[];
+    if (index >= 0) {
+      updated = [...list];
+      updated[index] = dispatch;
+    } else {
+      updated = [dispatch, ...list];
+    }
+    saveToStorage(STORAGE_KEYS.FUEL_DISPATCHES, updated);
+    return dispatch;
+  },
+
+  async deleteFuelDispatch(id: string): Promise<boolean> {
+    await mockLatency(100);
+    const list = await this.getFuelDispatches();
+    const updated = list.filter((d) => d.id !== id);
+    saveToStorage(STORAGE_KEYS.FUEL_DISPATCHES, updated);
+    return true;
+  },
+
+  // --- MÓDULO TALLER: ENTRADA DE MATERIALES A OBRAS / TALLER ---
+  async getMaterialEntries(filters?: {
+    obra?: string;
+    proveedor?: string;
+  }): Promise<MaterialEntry[]> {
+    await mockLatency(50);
+    let list = loadFromStorage<MaterialEntry[]>(STORAGE_KEYS.MATERIAL_ENTRIES, INITIAL_MATERIAL_ENTRIES);
+    if (filters?.obra && filters.obra !== 'TODAS') {
+      list = list.filter((e) => e.obraDestino.toLowerCase() === filters.obra!.toLowerCase());
+    }
+    if (filters?.proveedor && filters.proveedor.trim()) {
+      list = list.filter((e) => e.proveedor.toLowerCase().includes(filters.proveedor!.toLowerCase()));
+    }
+    return list;
+  },
+
+  async saveMaterialEntry(entry: MaterialEntry): Promise<MaterialEntry> {
+    await mockLatency(100);
+    const list = await this.getMaterialEntries();
+    const index = list.findIndex((e) => e.id === entry.id || (e.nroRemision && e.nroRemision === entry.nroRemision));
+    let updated: MaterialEntry[];
+    if (index >= 0) {
+      updated = [...list];
+      updated[index] = entry;
+    } else {
+      updated = [entry, ...list];
+    }
+    saveToStorage(STORAGE_KEYS.MATERIAL_ENTRIES, updated);
+    return entry;
+  },
+
+  async deleteMaterialEntry(id: string): Promise<boolean> {
+    await mockLatency(100);
+    const list = await this.getMaterialEntries();
+    const updated = list.filter((e) => e.id !== id);
+    saveToStorage(STORAGE_KEYS.MATERIAL_ENTRIES, updated);
+    return true;
+  },
+
+  // --- MÓDULO TALLER: ÓRDENES DE SERVICIO & MANTENIMIENTO ---
+  async getMaintenanceOrders(filters?: {
+    codmaq?: string;
+    obra?: string;
+    estado?: string;
+  }): Promise<MaintenanceOrder[]> {
+    await mockLatency(50);
+    let list = loadFromStorage<MaintenanceOrder[]>(STORAGE_KEYS.MAINTENANCE_ORDERS, INITIAL_MAINTENANCE_ORDERS);
+    if (filters?.codmaq && filters.codmaq.trim()) {
+      const q = filters.codmaq.toLowerCase().trim();
+      list = list.filter((o) => o.codmaq.toLowerCase().includes(q));
+    }
+    if (filters?.obra && filters.obra !== 'TODAS') {
+      list = list.filter((o) => o.obraRealizado.toLowerCase() === filters.obra!.toLowerCase());
+    }
+    if (filters?.estado && filters.estado !== 'TODOS') {
+      list = list.filter((o) => o.estado === filters.estado);
+    }
+    return list;
+  },
+
+  async saveMaintenanceOrder(order: MaintenanceOrder): Promise<MaintenanceOrder> {
+    await mockLatency(100);
+    const list = await this.getMaintenanceOrders();
+    const index = list.findIndex((o) => o.id === order.id || o.nroOrden === order.nroOrden);
+    let updated: MaintenanceOrder[];
+    if (index >= 0) {
+      updated = [...list];
+      updated[index] = order;
+    } else {
+      updated = [order, ...list];
+    }
+    saveToStorage(STORAGE_KEYS.MAINTENANCE_ORDERS, updated);
+    return order;
+  },
+
+  async deleteMaintenanceOrder(id: number | string): Promise<boolean> {
+    await mockLatency(100);
+    const list = await this.getMaintenanceOrders();
+    const updated = list.filter((o) => String(o.id) !== String(id) && o.nroOrden !== String(id));
+    saveToStorage(STORAGE_KEYS.MAINTENANCE_ORDERS, updated);
+    return true;
+  },
+
+  // --- MOTOR PODEROSO DE CONSULTA Y ANÁLISIS DE TALLER & OBRAS ---
+  async getWorkshopAnalysis(filters?: {
+    obra?: string;
+    codmaq?: string;
+    fechaDesde?: string;
+    fechaHasta?: string;
+  }) {
+    const dispatches = await this.getFuelDispatches(filters);
+    const entries = await this.getMaterialEntries({ obra: filters?.obra });
+    const orders = await this.getMaintenanceOrders({
+      codmaq: filters?.codmaq,
+      obra: filters?.obra,
+    });
+    const machines = await this.getMachines();
+
+    // Cálculos de fluidos y combustible
+    const totalGasoil = dispatches.reduce((acc, d) => acc + (d.gasoilLitros || 0), 0);
+    const totalAceiteMotor = dispatches.reduce((acc, d) => acc + (d.aceite15W40 || 0), 0);
+    const totalAceiteHidraulico = dispatches.reduce((acc, d) => acc + (d.aceiteHidraulico68 || 0), 0);
+    const totalAceiteTransmision = dispatches.reduce(
+      (acc, d) => acc + (d.aceite80W90 || 0) + (d.aceiteTO4 || 0) + (d.aceiteATF || 0),
+      0
+    );
+    const totalAceitesTodos =
+      totalAceiteMotor + totalAceiteHidraulico + totalAceiteTransmision +
+      dispatches.reduce((acc, d) => acc + (d.aceite10 || 0), 0);
+    const totalGrasa = dispatches.reduce((acc, d) => acc + (d.grasaKg || 0), 0);
+    const totalHorasDifK = dispatches.reduce((acc, d) => acc + (d.difK || 0), 0);
+    const promedioConsumoHora = totalHorasDifK > 0 ? Number((totalGasoil / totalHorasDifK).toFixed(2)) : 0;
+
+    // Entradas de materiales totales
+    const entradasGasoil = entries.reduce((acc, e) => acc + (e.gasoilLitros || 0), 0);
+    const entradasAceite = entries.reduce(
+      (acc, e) =>
+        acc +
+        (e.aceite15W40 || 0) +
+        (e.aceiteHidraulico68 || 0) +
+        (e.aceiteTO4 || 0) +
+        (e.aceite80W90 || 0) +
+        (e.aceiteSAE10 || 0) +
+        (e.aceiteSAE30 || 0) +
+        (e.aceiteSAE50 || 0),
+      0
+    );
+
+    // Agrupación por Obra
+    const porObra: Record<string, { gasoil: number; aceites: number; horas: number; despachosCount: number }> = {};
+    for (const d of dispatches) {
+      const ob = d.obra || 'SIN OBRA';
+      if (!porObra[ob]) {
+        porObra[ob] = { gasoil: 0, aceites: 0, horas: 0, despachosCount: 0 };
+      }
+      porObra[ob].gasoil += d.gasoilLitros || 0;
+      porObra[ob].aceites += (d.aceite15W40 || 0) + (d.aceiteHidraulico68 || 0) + (d.aceiteTO4 || 0) + (d.aceite80W90 || 0);
+      porObra[ob].horas += d.difK || 0;
+      porObra[ob].despachosCount += 1;
+    }
+
+    // Agrupación por Máquina
+    const porMaquina: Record<
+      string,
+      { codmaq: string; descripcion: string; gasoil: number; aceites: number; horas: number; ltsHora: number }
+    > = {};
+    for (const d of dispatches) {
+      const cod = d.codmaq;
+      if (!porMaquina[cod]) {
+        const mObj = machines.find((m) => m.codmaq.toLowerCase() === cod.toLowerCase());
+        porMaquina[cod] = {
+          codmaq: cod,
+          descripcion: mObj ? `${mObj.marca} ${mObj.modelo}` : cod,
+          gasoil: 0,
+          aceites: 0,
+          horas: 0,
+          ltsHora: 0,
+        };
+      }
+      porMaquina[cod].gasoil += d.gasoilLitros || 0;
+      porMaquina[cod].aceites += (d.aceite15W40 || 0) + (d.aceiteHidraulico68 || 0) + (d.aceiteTO4 || 0) + (d.aceite80W90 || 0);
+      porMaquina[cod].horas += d.difK || 0;
+    }
+
+    // Calcular ratios por máquina
+    Object.values(porMaquina).forEach((pm) => {
+      pm.ltsHora = pm.horas > 0 ? Number((pm.gasoil / pm.horas).toFixed(2)) : 0;
+    });
+
+    return {
+      totalGasoil,
+      totalAceiteMotor,
+      totalAceiteHidraulico,
+      totalAceiteTransmision,
+      totalAceitesTodos,
+      totalGrasa,
+      totalHorasDifK,
+      promedioConsumoHora,
+      entradasGasoil,
+      entradasAceite,
+      saldoGasoilEstimado: entradasGasoil - totalGasoil,
+      porObra,
+      porMaquina,
+      serviciosCompletados: orders.filter((o) => o.estado === 'COMPLETADO').length,
+      serviciosPendientes: orders.filter((o) => o.estado !== 'COMPLETADO').length,
+      dispatchesCount: dispatches.length,
+      entriesCount: entries.length,
+    };
+  },
+
+  // --- MÓDULO IMPORTADOR & GESTIÓN DE BASE DE DATOS ACCESS ---
+  async getTableCounts(): Promise<Record<StorageTableKey, number>> {
+    const [
+      machines,
+      totalizers,
+      services,
+      orders,
+      articles,
+      dailyReports,
+      dispatches,
+      pettyCash,
+      suppliers,
+      fundRequests,
+    ] = await Promise.all([
+      this.getMachines(),
+      this.getTotalizers(),
+      this.getServiceRecords(),
+      this.getOrders(),
+      this.getArticles(),
+      this.getDailyReports(),
+      this.getDispatches(),
+      this.getPettyCashExpenses(),
+      this.getSuppliers(),
+      this.getFundRequests(),
+    ]);
+
+    return {
+      MACHINES: machines.length,
+      TOTALIZERS: totalizers.length,
+      SERVICES: services.length,
+      ORDERS: orders.length,
+      ARTICLES: articles.length,
+      DAILY_REPORTS: dailyReports.length,
+      DISPATCHES: dispatches.length,
+      PETTY_CASH: pettyCash.length,
+      SUPPLIERS: suppliers.length,
+      FUND_REQUESTS: fundRequests.length,
+    };
+  },
+
+  async importTableData(
+    tableKey: StorageTableKey,
+    records: any[],
+    mode: 'replace' | 'append' = 'replace'
+  ): Promise<{ count: number; table: StorageTableKey }> {
+    await mockLatency(200);
+    const storageKey = STORAGE_KEYS[tableKey];
+    
+    // Normalizar inteligentemente los registros para garantizar que campos esenciales nunca sean undefined o NaN
+    const normalizedRecords = records.map((rec, idx) => normalizeRecordForTable(tableKey, rec, idx));
+    let finalRecords = normalizedRecords;
+
+    if (mode === 'append') {
+      const existing = loadFromStorage<any[]>(storageKey, []);
+      finalRecords = [...existing, ...normalizedRecords];
+    }
+
+    saveToStorage(storageKey, finalRecords);
+
+    // Notificar a componentes activos
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: finalRecords.length } }));
+    }
+
+    return { count: finalRecords.length, table: tableKey };
+  },
+
+  async exportAllDatabase(): Promise<Record<StorageTableKey, any[]>> {
+    await mockLatency(200);
+    return {
+      MACHINES: await this.getMachines(),
+      TOTALIZERS: await this.getTotalizers(),
+      SERVICES: await this.getServiceRecords(),
+      ORDERS: await this.getOrders(),
+      ARTICLES: await this.getArticles(),
+      DAILY_REPORTS: await this.getDailyReports(),
+      DISPATCHES: await this.getDispatches(),
+      PETTY_CASH: await this.getPettyCashExpenses(),
+      SUPPLIERS: await this.getSuppliers(),
+      FUND_REQUESTS: await this.getFundRequests(),
+    };
+  },
+
+  async importFullDatabase(backup: Record<string, any[]>): Promise<{ importedTables: string[] }> {
+    await mockLatency(300);
+    const imported: string[] = [];
+
+    for (const [key, value] of Object.entries(backup)) {
+      const upperKey = key.toUpperCase() as StorageTableKey;
+      if (STORAGE_KEYS[upperKey] && Array.isArray(value)) {
+        saveToStorage(STORAGE_KEYS[upperKey], value);
+        imported.push(upperKey);
+      }
+    }
+
+    return { importedTables: imported };
+  },
+
+  async getTableData(tableKey: StorageTableKey): Promise<any[]> {
+    await mockLatency(100);
+    return loadFromStorage<any[]>(STORAGE_KEYS[tableKey], []);
+  },
+
+  async clearTable(tableKey: StorageTableKey): Promise<void> {
+    await mockLatency(150);
+    saveToStorage(STORAGE_KEYS[tableKey], []);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: 0 } }));
+    }
+  },
+
+  async deleteRecordFromTable(tableKey: StorageTableKey, identifier: string | number): Promise<boolean> {
+    await mockLatency(100);
+    const list = loadFromStorage<any[]>(STORAGE_KEYS[tableKey], []);
+    const idStr = String(identifier).toLowerCase();
+    const updated = list.filter((item) => {
+      if (item.id !== undefined && String(item.id).toLowerCase() === idStr) return false;
+      if (item.codmaq !== undefined && String(item.codmaq).toLowerCase() === idStr) return false;
+      if (item.pedido !== undefined && String(item.pedido).toLowerCase() === idStr) return false;
+      if (item.codigo !== undefined && String(item.codigo).toLowerCase() === idStr) return false;
+      if (item.numeroEnvio !== undefined && String(item.numeroEnvio).toLowerCase() === idStr) return false;
+      if (item.numeroSolicitud !== undefined && String(item.numeroSolicitud).toLowerCase() === idStr) return false;
+      if (item.codigoProveedor !== undefined && String(item.codigoProveedor).toLowerCase() === idStr) return false;
+      if (item.comprobanteNumero !== undefined && String(item.comprobanteNumero).toLowerCase() === idStr) return false;
+      return true;
+    });
+    saveToStorage(STORAGE_KEYS[tableKey], updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: updated.length } }));
+    }
+    return true;
+  },
+
+  async clearAllDatabase(): Promise<void> {
+    await mockLatency(300);
+    Object.values(STORAGE_KEYS).forEach((key) => {
+      saveToStorage(key, []);
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { all: true } }));
+    }
+  },
+
+  async resetToDemoData(): Promise<void> {
+    await mockLatency(300);
+    saveToStorage(STORAGE_KEYS.MACHINES, INITIAL_MACHINES);
+    saveToStorage(STORAGE_KEYS.TOTALIZERS, INITIAL_TOTALIZERS);
+    saveToStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
+    saveToStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+    saveToStorage(STORAGE_KEYS.ARTICLES, INITIAL_ARTICLES);
+    saveToStorage(STORAGE_KEYS.DAILY_REPORTS, INITIAL_DAILY_REPORTS);
+    saveToStorage(STORAGE_KEYS.DISPATCHES, INITIAL_DISPATCHES);
+    saveToStorage(STORAGE_KEYS.PETTY_CASH, INITIAL_PETTY_CASH);
+    saveToStorage(STORAGE_KEYS.SUPPLIERS, INITIAL_SUPPLIERS);
+    saveToStorage(STORAGE_KEYS.FUND_REQUESTS, INITIAL_FUND_REQUESTS);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { all: true, reset: true } }));
+    }
+  },
+
+  async resetDatabase(): Promise<void> {
+    await this.resetToDemoData();
   },
 };

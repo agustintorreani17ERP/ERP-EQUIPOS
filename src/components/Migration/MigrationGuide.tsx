@@ -196,33 +196,33 @@ export const MigrationGuide: React.FC = () => {
       </div>
 
       {/* Arquitectura REST API Futura */}
-      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-md space-y-3 text-xs">
-        <div className="flex items-center space-x-2 text-emerald-400 font-bold uppercase tracking-wider">
-          <ShieldCheck className="w-4 h-4" />
+      <div className="bg-white text-slate-900 p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3 text-xs">
+        <div className="flex items-center space-x-2 text-blue-700 font-bold uppercase tracking-wider">
+          <ShieldCheck className="w-4 h-4 text-blue-600" />
           <span>Hoja de Ruta de Backend REST (Endpoints Listos)</span>
         </div>
-        <p className="text-slate-300">
+        <p className="text-slate-600">
           En el archivo <code>src/services/api.ts</code>, todos los métodos están desacoplados mediante el patrón
           Repository/Service con anotaciones <code>// TODO: Fetch from /api/...</code>. Para conectar a una base
           de datos PostgreSQL o Cloud Firestore, sólo se sustituye el cuerpo del servicio manteniendo intactos
           los contratos de interfaz TypeScript.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 font-mono text-[11px] text-slate-300">
-          <div className="bg-slate-800/80 p-3 rounded border border-slate-700">
-            <span className="text-emerald-400 font-bold">GET</span> /api/machines/:codmaq
-            <p className="text-slate-400 text-[10px] mt-1">Reemplaza: Cuadro_combinado168_AfterUpdate</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 font-mono text-[11px] text-slate-700">
+          <div className="bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+            <span className="text-blue-700 font-bold">GET</span> /api/machines/:codmaq
+            <p className="text-slate-500 text-[10px] mt-1">Reemplaza: Cuadro_combinado168_AfterUpdate</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded border border-slate-700">
-            <span className="text-blue-400 font-bold">POST</span> /api/totalizers
-            <p className="text-slate-400 text-[10px] mt-1">Reemplaza: Form_A TOTALIZADOR_AfterUpdate</p>
+          <div className="bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+            <span className="text-blue-700 font-bold">POST</span> /api/totalizers
+            <p className="text-slate-500 text-[10px] mt-1">Reemplaza: Form_A TOTALIZADOR_AfterUpdate</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded border border-slate-700">
-            <span className="text-amber-400 font-bold">PUT</span> /api/services/:id
-            <p className="text-slate-400 text-[10px] mt-1">Reemplaza: Form_CAT 416 allowedit &amp; save</p>
+          <div className="bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+            <span className="text-blue-700 font-bold">PUT</span> /api/services/:id
+            <p className="text-slate-500 text-[10px] mt-1">Reemplaza: Form_CAT 416 allowedit &amp; save</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded border border-slate-700">
-            <span className="text-purple-400 font-bold">POST</span> /api/fund-requests/:id/send-email
-            <p className="text-slate-400 text-[10px] mt-1">Reemplaza: DoCmd.SendObject acReport, "SF"</p>
+          <div className="bg-blue-50/40 p-3 rounded-xl border border-blue-200">
+            <span className="text-blue-700 font-bold">POST</span> /api/fund-requests/:id/send-email
+            <p className="text-slate-500 text-[10px] mt-1">Reemplaza: DoCmd.SendObject acReport, "SF"</p>
           </div>
         </div>
       </div>

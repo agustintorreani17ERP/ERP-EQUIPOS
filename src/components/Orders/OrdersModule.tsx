@@ -414,7 +414,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-mono text-sm bg-slate-900 text-white font-bold px-2.5 py-0.5 rounded-sm">
+                  <span className="font-mono text-sm bg-blue-50 text-blue-800 border border-blue-200 font-bold px-2.5 py-0.5 rounded-md">
                     {selectedOrder.pedido}
                   </span>
                   <h2 className="text-lg font-bold text-slate-800">Requerimiento de Materiales</h2>
@@ -487,7 +487,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Renglones del Pedido (Form_EDITAR ART CON CALCULO)
+                    Renglones y Artículos del Pedido
                   </h3>
                   <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">
                     Cálculo Automático
@@ -692,7 +692,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-800">
-                Alta de Artículo en Depósito (Form_EDITAR ARTICULO)
+                Alta de Artículo en Depósito
               </h3>
               <button
                 onClick={() => setShowNewArticleModal(false)}

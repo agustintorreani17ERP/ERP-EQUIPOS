@@ -174,7 +174,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
             }`}
           >
             <Wallet className="w-4 h-4" />
-            <span>Solicitudes de Fondos (Form_SFONDOS)</span>
+            <span>Solicitudes de Fondos</span>
           </button>
 
           <button
@@ -186,7 +186,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
             }`}
           >
             <Receipt className="w-4 h-4" />
-            <span>Caja Chica (Form_CAJA CHICA)</span>
+            <span>Caja Chica</span>
           </button>
 
           <button
@@ -198,7 +198,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
             }`}
           >
             <Building className="w-4 h-4" />
-            <span>Proveedores a Pagar (Form_PROVEEDORES A PAGAR)</span>
+            <span>Proveedores a Pagar</span>
           </button>
         </div>
 
@@ -209,17 +209,15 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
               id="btn-new-fund-request"
               onClick={() => setShowNewSfModal(true)}
               className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors"
-              title="Comando44_Click: DoCmd.GoToRecord , , acNewRec"
             >
               <Plus className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-              Nueva Solicitud (acNewRec)
+              Nueva Solicitud
             </button>
           )}
 
           <button
             onClick={() => onOpenReport('POR PROVEEDOR FECHADO', fundRequests[0])}
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors"
-            title="Comando42_Click: DoCmd.OutputTo acReport, 'POR PROVEEDOR FECHADO'"
           >
             <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
             Por Proveedor Fechado
@@ -227,7 +225,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
         </div>
       </div>
 
-      {/* Alerta de Envío de Correo (DoCmd.SendObject) */}
+      {/* Alerta de Envío de Correo */}
       {emailStatus && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg flex items-center space-x-2 text-xs animate-in fade-in">
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -235,17 +233,15 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
         </div>
       )}
 
-      {/* VISTA 1: SOLICITUDES DE FONDOS (Form_SFONDOS, Form_SFONDOS PEND, Form_SOLIC DE FONDOS PEND TUBULAR) */}
+      {/* VISTA 1: SOLICITUDES DE FONDOS */}
       {activeTab === 'SFONDOS' && (
         <div className="space-y-4">
-          {/* Barra de Filtros correspondientes a los formularios exportados */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
-                Filtros de Formulario:
+                Filtros:
               </span>
 
-              {/* Form_SFONDOS PEND */}
               <button
                 onClick={() => setFilterPendingOnly(!filterPendingOnly)}
                 className={`px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -257,7 +253,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                 Solo Pendientes ({fundRequests.filter((s) => s.estado === 'PENDIENTE').length})
               </button>
 
-              {/* Form_SOLIC DE FONDOS PEND TUBULAR */}
               <button
                 onClick={() => setFilterTubularOnly(!filterTubularOnly)}
                 className={`px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -266,7 +261,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                     : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Tubular (Form_SOLIC TUBULAR)
+                Partida Tubular
               </button>
 
               {/* Filtro por Proveedor */}
@@ -502,7 +497,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-800">
-                Nueva Solicitud de Fondos (Form_SFONDOS)
+                Nueva Solicitud de Fondos
               </h3>
               <button
                 onClick={() => setShowNewSfModal(false)}
@@ -570,7 +565,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                   className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
                 <label htmlFor="chk-tubular" className="text-slate-700 font-medium cursor-pointer">
-                  Afectación a Partida Tubular (Form_SOLIC DE FONDOS PEND TUBULAR)
+                  Afectación a Partida Tubular
                 </label>
               </div>
 

@@ -216,7 +216,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="bg-slate-900 text-white font-mono text-xs font-bold px-2 py-0.5 rounded-sm">
+                  <span className="bg-blue-50 text-blue-800 border border-blue-200 font-mono text-xs font-bold px-2.5 py-0.5 rounded-md">
                     {selectedReport.fecha}
                   </span>
                   <h2 className="text-lg font-bold text-slate-800">
@@ -240,7 +240,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Chofer [CHOFER]</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Chofer / Maquinista</label>
                 <input
                   type="text"
                   value={selectedReport.chofer}
@@ -250,7 +250,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Máquina Asignada [CODMAQ]</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Máquina Asignada</label>
                 <select
                   value={selectedReport.codmaq}
                   onChange={(e) => setSelectedReport({ ...selectedReport, codmaq: e.target.value })}
@@ -351,7 +351,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <div>
               <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase">
-                Form_ENVIO
+                Remitos
               </span>
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mt-1">
                 Remitos de Despacho
