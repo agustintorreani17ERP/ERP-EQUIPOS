@@ -1,46 +1,45 @@
-# ERP Gestión Operativa
+# Taller — módulo de CTRL+
 
-Migración web moderna de sistema ERP operativo legacy (originalmente desarrollado en Microsoft Access VBA) a **React 19**, **TypeScript** y **Tailwind CSS**.
+Módulo de taller (flota, mantenimientos, combustibles, abastecimiento, fondos y partes
+diarios). Se conecta a CTRL+ mediante el contrato `GET /api/module/manifest` y al ERP
+general mediante un único punto de cruce (`server/bridge`, pendiente de fase 4).
 
-## Módulos del Sistema
+## Requisitos
 
-- **Panel General (Dashboard)**: Métricas consolidadas de flota, mantenimiento, pedidos y fondos.
-- **Flota y Maquinarias (`Form_AMAQUINAS` / `Form_A`)**: Control de equipos, ficha técnica, registro de horómetros y cálculo de horas trabajadas (`DifK`).
-- **Servicios de Mantenimiento (`Form_CAT 416` / `Form_FREZADORA 1000/2000 HS`)**: Protocolos de mantenimiento preventivo, checklist técnico y control de edición (`allowedit`).
-- **Pedidos de Materiales (`Form_AGREGAR PEDIDO` / `Form_EDITAR PEDIDO`)**: Gestión de órdenes de compra, renglones de insumos con cálculo en tiempo real y stock.
-- **Partes Diarios y Envíos (`Form_PARTE DIARIO` / `Form_ENVIO`)**: Partes operativos por chofer y remitos de entrega de materiales a obra.
-- **Tesorería y Solicitudes (`Form_SFONDOS` / `Form_CAJA CHICA`)**: Solicitudes de fondos, rendición de caja chica y cuentas corrientes de proveedores.
-- **Centro de Informes (`DoCmd.OpenReport`)**: Plantillas imprimibles y exportables en formato oficial A4.
-- **Auditoría de Migración**: Comparativa técnica de rutinas VBA frente a su implementación en TypeScript.
+- Node.js 18+
 
-## Requisitos Previos
-
-- Node.js 18+ o superior
-- npm / yarn / pnpm
-
-## Instalación y Ejecución Local
-
-1. Clonar el repositorio:
-   ```bash
-   git clone https://github.com/TU-USUARIO/TU-REPOSITORIO.git
-   cd TU-REPOSITORIO
-   ```
-
-2. Instalar dependencias:
-   ```bash
-   npm install
-   ```
-
-3. Iniciar el servidor de desarrollo:
-   ```bash
-   npm run dev
-   ```
-
-4. Abrir en el navegador en `http://localhost:3000` (o el puerto indicado en la terminal).
-
-## Compilación para Producción
+## Desarrollo
 
 ```bash
-npm run build
+npm install
+npm run dev         # web en http://127.0.0.1:3100 y API en http://127.0.0.1:3101
 ```
-Los archivos optimizados se generarán en la carpeta `dist/`.
+
+- Sin `DATABASE_URL`, la API usa una base local (Postgres en PGlite, en `.data/pglite`):
+  no hace falta instalar ni contratar nada. La primera vez se crea sola.
+- Con `DATABASE_URL` (Postgres o Neon) la API usa esa base. Ver `.env.example`.
+- `.env` con `AUTH_BYPASS=true` (ya creado en desarrollo) permite probar la API sin Clerk
+  enviando las cabeceras `X-Dev-User: <cualquiera>` y
+  `X-Dev-Company: 00000000-0000-4000-8000-000000000001` (empresa de ejemplo).
+  Nunca se activa en producción.
+
+Comandos separados: `npm run dev:web` y `npm run dev:api`.
+
+## Pruebas y chequeos
+
+```bash
+npm test        # vitest: contrato del módulo, autenticación y aislamiento por empresa (RLS)
+npm run lint    # tsc --noEmit
+npm run build   # build de la web
+```
+
+## Estructura
+
+```
+src/client/   web (React 19, Tailwind)
+src/server/   API (Express 4, Drizzle, Postgres con RLS)
+src/shared/   dominio puro compartido (tipos, cálculos)
+```
+
+Reglas de límites: `shared` no importa de nadie; `client` y `server` solo de `shared`;
+solo `server/bridge` habla con el ERP.

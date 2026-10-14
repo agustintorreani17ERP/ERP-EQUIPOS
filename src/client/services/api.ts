@@ -19,7 +19,7 @@ import {
   PettyCashExpense,
   SupplierAccount,
   TotalizerReading,
-} from '../types/erp';
+} from '../../shared/erp';
 import { calculateHourDifference, calculateOrderTotals } from '../utils/legacyCalculations';
 
 // Claves de almacenamiento local para persistencia entre recargas
@@ -935,11 +935,6 @@ export const ErpApi = {
     return loadFromStorage(STORAGE_KEYS.MACHINES, INITIAL_MACHINES);
   },
 
-  async getMachineByCode(codmaq: string): Promise<Machine | undefined> {
-    // TODO: Fetch from /api/machines/${codmaq}
-    const machines = await this.getMachines();
-    return machines.find((m) => m.codmaq.toLowerCase() === codmaq.toLowerCase());
-  },
 
   async saveMachine(machineData: Machine): Promise<Machine> {
     // TODO: POST/PUT to /api/machines
@@ -1018,17 +1013,7 @@ export const ErpApi = {
     return newReading;
   },
 
-  async saveTotalizerReading(reading: TotalizerReading): Promise<TotalizerReading> {
-    return this.addTotalizerReading(reading);
-  },
 
-  async deleteTotalizer(id: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getTotalizers();
-    const updated = list.filter((r) => r.id !== id);
-    saveToStorage(STORAGE_KEYS.TOTALIZERS, updated);
-    return true;
-  },
 
   // --- MÓDULO SERVICIOS DE EQUIPOS ---
   async getServiceRecords(codmaq?: string): Promise<EquipmentServiceRecord[]> {
@@ -1041,11 +1026,6 @@ export const ErpApi = {
     return list;
   },
 
-  async getServiceById(id: number): Promise<EquipmentServiceRecord | undefined> {
-    // TODO: Fetch from /api/services/${id}
-    const services = await this.getServiceRecords();
-    return services.find((s) => s.id === id);
-  },
 
   async saveServiceRecord(record: EquipmentServiceRecord): Promise<EquipmentServiceRecord> {
     // TODO: POST/PUT to /api/services
@@ -1065,13 +1045,6 @@ export const ErpApi = {
     return record;
   },
 
-  async deleteServiceRecord(id: number | string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getServiceRecords();
-    const updated = list.filter((s) => String(s.id) !== String(id));
-    saveToStorage(STORAGE_KEYS.SERVICES, updated);
-    return true;
-  },
 
   // --- MÓDULO PEDIDOS DE MATERIALES Y ARTÍCULOS ---
   async getOrders(): Promise<MaterialOrder[]> {
@@ -1080,11 +1053,6 @@ export const ErpApi = {
     return loadFromStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
   },
 
-  async getOrderByCode(pedidoCode: string): Promise<MaterialOrder | undefined> {
-    // TODO: Fetch from /api/orders/${pedidoCode}
-    const orders = await this.getOrders();
-    return orders.find((o) => o.pedido.toLowerCase() === pedidoCode.toLowerCase());
-  },
 
   async saveOrder(order: MaterialOrder): Promise<MaterialOrder> {
     // TODO: POST/PUT to /api/orders
@@ -1112,13 +1080,6 @@ export const ErpApi = {
     return orderWithTotals;
   },
 
-  async deleteOrder(pedidoOrId: string): Promise<boolean> {
-    await mockLatency();
-    const orders = await this.getOrders();
-    const updated = orders.filter((o) => o.id !== pedidoOrId && o.pedido.toLowerCase() !== pedidoOrId.toLowerCase());
-    saveToStorage(STORAGE_KEYS.ORDERS, updated);
-    return true;
-  },
 
   async getArticles(): Promise<Article[]> {
     // TODO: Fetch from /api/articles
@@ -1144,13 +1105,6 @@ export const ErpApi = {
     return article;
   },
 
-  async deleteArticle(codigo: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getArticles();
-    const updated = list.filter((a) => a.codigo.toLowerCase() !== codigo.toLowerCase());
-    saveToStorage(STORAGE_KEYS.ARTICLES, updated);
-    return true;
-  },
 
   // --- MÓDULO PARTES DIARIOS Y ENVÍOS ---
   async getDailyReports(choferFilter?: string): Promise<DailyReport[]> {
@@ -1163,44 +1117,9 @@ export const ErpApi = {
     return list;
   },
 
-  async addDailyReport(report: Omit<DailyReport, 'id' | 'horasTrabajadas'>): Promise<DailyReport> {
-    // TODO: POST to /api/daily-reports
-    await mockLatency();
-    const list = await this.getDailyReports();
-    const horasTrabajadas = Math.max(0, report.horasFin - report.horasInicio);
 
-    const newReport: DailyReport = {
-      ...report,
-      id: `dr-${Date.now()}`,
-      horasTrabajadas,
-    };
 
-    const updated = [newReport, ...list];
-    saveToStorage(STORAGE_KEYS.DAILY_REPORTS, updated);
-    return newReport;
-  },
 
-  async deleteDailyReport(id: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getDailyReports();
-    const updated = list.filter((r) => r.id !== id);
-    saveToStorage(STORAGE_KEYS.DAILY_REPORTS, updated);
-    return true;
-  },
-
-  async getDispatches(): Promise<DispatchVoucher[]> {
-    // TODO: Fetch from /api/dispatches
-    await mockLatency();
-    return loadFromStorage(STORAGE_KEYS.DISPATCHES, INITIAL_DISPATCHES);
-  },
-
-  async deleteDispatch(numeroEnvioOrId: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getDispatches();
-    const updated = list.filter((d) => d.id !== numeroEnvioOrId && d.numeroEnvio !== numeroEnvioOrId);
-    saveToStorage(STORAGE_KEYS.DISPATCHES, updated);
-    return true;
-  },
 
   // --- MÓDULO TESORERÍA / FINANZAS ---
   async getPettyCashExpenses(): Promise<PettyCashExpense[]> {
@@ -1209,29 +1128,8 @@ export const ErpApi = {
     return loadFromStorage(STORAGE_KEYS.PETTY_CASH, INITIAL_PETTY_CASH);
   },
 
-  async addPettyCashExpense(expense: Omit<PettyCashExpense, 'id'>): Promise<PettyCashExpense> {
-    // TODO: POST to /api/petty-cash
-    await mockLatency();
-    const list = await this.getPettyCashExpenses();
-    const newRecord: PettyCashExpense = {
-      ...expense,
-      id: `pc-${Date.now()}`,
-    };
-    saveToStorage(STORAGE_KEYS.PETTY_CASH, [newRecord, ...list]);
-    return newRecord;
-  },
 
-  async savePettyCashExpense(expense: PettyCashExpense): Promise<PettyCashExpense> {
-    return this.addPettyCashExpense(expense);
-  },
 
-  async deletePettyCashExpense(id: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getPettyCashExpenses();
-    const updated = list.filter((e) => e.id !== id);
-    saveToStorage(STORAGE_KEYS.PETTY_CASH, updated);
-    return true;
-  },
 
   async getSuppliers(): Promise<SupplierAccount[]> {
     // TODO: Fetch from /api/suppliers
@@ -1256,15 +1154,6 @@ export const ErpApi = {
     return supplier;
   },
 
-  async deleteSupplier(codigoProveedorOrId: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getSuppliers();
-    const updated = list.filter(
-      (s) => s.id !== codigoProveedorOrId && s.codigoProveedor !== codigoProveedorOrId
-    );
-    saveToStorage(STORAGE_KEYS.SUPPLIERS, updated);
-    return true;
-  },
 
   async getFundRequests(options?: {
     pendingOnly?: boolean;
@@ -1306,427 +1195,30 @@ export const ErpApi = {
     return request;
   },
 
-  async deleteFundRequest(idOrNumero: string): Promise<boolean> {
-    await mockLatency();
-    const list = await this.getFundRequests();
-    const updated = list.filter((sf) => sf.id !== idOrNumero && sf.numeroSolicitud !== idOrNumero);
-    saveToStorage(STORAGE_KEYS.FUND_REQUESTS, updated);
-    return true;
-  },
 
-  async simulateSendObjectEmail(requestId: string): Promise<{ success: boolean; message: string }> {
-    // TODO: POST to /api/fund-requests/${requestId}/send-email (Reemplazo de DoCmd.SendObject acReport, "SF")
-    await mockLatency(300);
-    const requests = await this.getFundRequests();
-    const target = requests.find((sf) => sf.id === requestId);
-    if (!target) {
-      throw new Error(`Solicitud de Fondos ${requestId} no encontrada`);
-    }
-    return {
-      success: true,
-      message: `Reporte 'SF' enviado exitosamente por correo electrónico a Tesorería / ${target.proveedor}`,
-    };
-  },
 
   // --- MÓDULO TALLER: DESPACHOS Y CONSUMOS DE GASOIL & ACEITES ---
-  async getFuelDispatches(filters?: {
-    obra?: string;
-    codmaq?: string;
-    fechaDesde?: string;
-    fechaHasta?: string;
-  }): Promise<FuelOilDispatch[]> {
-    await mockLatency(50);
-    let list = loadFromStorage<FuelOilDispatch[]>(STORAGE_KEYS.FUEL_DISPATCHES, INITIAL_FUEL_DISPATCHES);
-    if (filters?.obra && filters.obra !== 'TODAS') {
-      list = list.filter((d) => d.obra.toLowerCase() === filters.obra!.toLowerCase());
-    }
-    if (filters?.codmaq && filters.codmaq.trim()) {
-      const q = filters.codmaq.toLowerCase().trim();
-      list = list.filter((d) => d.codmaq.toLowerCase().includes(q));
-    }
-    if (filters?.fechaDesde) {
-      list = list.filter((d) => d.fecha >= filters.fechaDesde!);
-    }
-    if (filters?.fechaHasta) {
-      list = list.filter((d) => d.fecha <= filters.fechaHasta!);
-    }
-    return list;
-  },
 
-  async saveFuelDispatch(dispatch: FuelOilDispatch): Promise<FuelOilDispatch> {
-    await mockLatency(100);
-    const list = await this.getFuelDispatches();
-    const index = list.findIndex((d) => d.id === dispatch.id || (d.nroRemito && d.nroRemito === dispatch.nroRemito));
-    let updated: FuelOilDispatch[];
-    if (index >= 0) {
-      updated = [...list];
-      updated[index] = dispatch;
-    } else {
-      updated = [dispatch, ...list];
-    }
-    saveToStorage(STORAGE_KEYS.FUEL_DISPATCHES, updated);
-    return dispatch;
-  },
 
-  async deleteFuelDispatch(id: string): Promise<boolean> {
-    await mockLatency(100);
-    const list = await this.getFuelDispatches();
-    const updated = list.filter((d) => d.id !== id);
-    saveToStorage(STORAGE_KEYS.FUEL_DISPATCHES, updated);
-    return true;
-  },
 
   // --- MÓDULO TALLER: ENTRADA DE MATERIALES A OBRAS / TALLER ---
-  async getMaterialEntries(filters?: {
-    obra?: string;
-    proveedor?: string;
-  }): Promise<MaterialEntry[]> {
-    await mockLatency(50);
-    let list = loadFromStorage<MaterialEntry[]>(STORAGE_KEYS.MATERIAL_ENTRIES, INITIAL_MATERIAL_ENTRIES);
-    if (filters?.obra && filters.obra !== 'TODAS') {
-      list = list.filter((e) => e.obraDestino.toLowerCase() === filters.obra!.toLowerCase());
-    }
-    if (filters?.proveedor && filters.proveedor.trim()) {
-      list = list.filter((e) => e.proveedor.toLowerCase().includes(filters.proveedor!.toLowerCase()));
-    }
-    return list;
-  },
 
-  async saveMaterialEntry(entry: MaterialEntry): Promise<MaterialEntry> {
-    await mockLatency(100);
-    const list = await this.getMaterialEntries();
-    const index = list.findIndex((e) => e.id === entry.id || (e.nroRemision && e.nroRemision === entry.nroRemision));
-    let updated: MaterialEntry[];
-    if (index >= 0) {
-      updated = [...list];
-      updated[index] = entry;
-    } else {
-      updated = [entry, ...list];
-    }
-    saveToStorage(STORAGE_KEYS.MATERIAL_ENTRIES, updated);
-    return entry;
-  },
 
-  async deleteMaterialEntry(id: string): Promise<boolean> {
-    await mockLatency(100);
-    const list = await this.getMaterialEntries();
-    const updated = list.filter((e) => e.id !== id);
-    saveToStorage(STORAGE_KEYS.MATERIAL_ENTRIES, updated);
-    return true;
-  },
 
   // --- MÓDULO TALLER: ÓRDENES DE SERVICIO & MANTENIMIENTO ---
-  async getMaintenanceOrders(filters?: {
-    codmaq?: string;
-    obra?: string;
-    estado?: string;
-  }): Promise<MaintenanceOrder[]> {
-    await mockLatency(50);
-    let list = loadFromStorage<MaintenanceOrder[]>(STORAGE_KEYS.MAINTENANCE_ORDERS, INITIAL_MAINTENANCE_ORDERS);
-    if (filters?.codmaq && filters.codmaq.trim()) {
-      const q = filters.codmaq.toLowerCase().trim();
-      list = list.filter((o) => o.codmaq.toLowerCase().includes(q));
-    }
-    if (filters?.obra && filters.obra !== 'TODAS') {
-      list = list.filter((o) => o.obraRealizado.toLowerCase() === filters.obra!.toLowerCase());
-    }
-    if (filters?.estado && filters.estado !== 'TODOS') {
-      list = list.filter((o) => o.estado === filters.estado);
-    }
-    return list;
-  },
 
-  async saveMaintenanceOrder(order: MaintenanceOrder): Promise<MaintenanceOrder> {
-    await mockLatency(100);
-    const list = await this.getMaintenanceOrders();
-    const index = list.findIndex((o) => o.id === order.id || o.nroOrden === order.nroOrden);
-    let updated: MaintenanceOrder[];
-    if (index >= 0) {
-      updated = [...list];
-      updated[index] = order;
-    } else {
-      updated = [order, ...list];
-    }
-    saveToStorage(STORAGE_KEYS.MAINTENANCE_ORDERS, updated);
-    return order;
-  },
 
-  async deleteMaintenanceOrder(id: number | string): Promise<boolean> {
-    await mockLatency(100);
-    const list = await this.getMaintenanceOrders();
-    const updated = list.filter((o) => String(o.id) !== String(id) && o.nroOrden !== String(id));
-    saveToStorage(STORAGE_KEYS.MAINTENANCE_ORDERS, updated);
-    return true;
-  },
 
   // --- MOTOR PODEROSO DE CONSULTA Y ANÁLISIS DE TALLER & OBRAS ---
-  async getWorkshopAnalysis(filters?: {
-    obra?: string;
-    codmaq?: string;
-    fechaDesde?: string;
-    fechaHasta?: string;
-  }) {
-    const dispatches = await this.getFuelDispatches(filters);
-    const entries = await this.getMaterialEntries({ obra: filters?.obra });
-    const orders = await this.getMaintenanceOrders({
-      codmaq: filters?.codmaq,
-      obra: filters?.obra,
-    });
-    const machines = await this.getMachines();
-
-    // Cálculos de fluidos y combustible
-    const totalGasoil = dispatches.reduce((acc, d) => acc + (d.gasoilLitros || 0), 0);
-    const totalAceiteMotor = dispatches.reduce((acc, d) => acc + (d.aceite15W40 || 0), 0);
-    const totalAceiteHidraulico = dispatches.reduce((acc, d) => acc + (d.aceiteHidraulico68 || 0), 0);
-    const totalAceiteTransmision = dispatches.reduce(
-      (acc, d) => acc + (d.aceite80W90 || 0) + (d.aceiteTO4 || 0) + (d.aceiteATF || 0),
-      0
-    );
-    const totalAceitesTodos =
-      totalAceiteMotor + totalAceiteHidraulico + totalAceiteTransmision +
-      dispatches.reduce((acc, d) => acc + (d.aceite10 || 0), 0);
-    const totalGrasa = dispatches.reduce((acc, d) => acc + (d.grasaKg || 0), 0);
-    const totalHorasDifK = dispatches.reduce((acc, d) => acc + (d.difK || 0), 0);
-    const promedioConsumoHora = totalHorasDifK > 0 ? Number((totalGasoil / totalHorasDifK).toFixed(2)) : 0;
-
-    // Entradas de materiales totales
-    const entradasGasoil = entries.reduce((acc, e) => acc + (e.gasoilLitros || 0), 0);
-    const entradasAceite = entries.reduce(
-      (acc, e) =>
-        acc +
-        (e.aceite15W40 || 0) +
-        (e.aceiteHidraulico68 || 0) +
-        (e.aceiteTO4 || 0) +
-        (e.aceite80W90 || 0) +
-        (e.aceiteSAE10 || 0) +
-        (e.aceiteSAE30 || 0) +
-        (e.aceiteSAE50 || 0),
-      0
-    );
-
-    // Agrupación por Obra
-    const porObra: Record<string, { gasoil: number; aceites: number; horas: number; despachosCount: number }> = {};
-    for (const d of dispatches) {
-      const ob = d.obra || 'SIN OBRA';
-      if (!porObra[ob]) {
-        porObra[ob] = { gasoil: 0, aceites: 0, horas: 0, despachosCount: 0 };
-      }
-      porObra[ob].gasoil += d.gasoilLitros || 0;
-      porObra[ob].aceites += (d.aceite15W40 || 0) + (d.aceiteHidraulico68 || 0) + (d.aceiteTO4 || 0) + (d.aceite80W90 || 0);
-      porObra[ob].horas += d.difK || 0;
-      porObra[ob].despachosCount += 1;
-    }
-
-    // Agrupación por Máquina
-    const porMaquina: Record<
-      string,
-      { codmaq: string; descripcion: string; gasoil: number; aceites: number; horas: number; ltsHora: number }
-    > = {};
-    for (const d of dispatches) {
-      const cod = d.codmaq;
-      if (!porMaquina[cod]) {
-        const mObj = machines.find((m) => m.codmaq.toLowerCase() === cod.toLowerCase());
-        porMaquina[cod] = {
-          codmaq: cod,
-          descripcion: mObj ? `${mObj.marca} ${mObj.modelo}` : cod,
-          gasoil: 0,
-          aceites: 0,
-          horas: 0,
-          ltsHora: 0,
-        };
-      }
-      porMaquina[cod].gasoil += d.gasoilLitros || 0;
-      porMaquina[cod].aceites += (d.aceite15W40 || 0) + (d.aceiteHidraulico68 || 0) + (d.aceiteTO4 || 0) + (d.aceite80W90 || 0);
-      porMaquina[cod].horas += d.difK || 0;
-    }
-
-    // Calcular ratios por máquina
-    Object.values(porMaquina).forEach((pm) => {
-      pm.ltsHora = pm.horas > 0 ? Number((pm.gasoil / pm.horas).toFixed(2)) : 0;
-    });
-
-    return {
-      totalGasoil,
-      totalAceiteMotor,
-      totalAceiteHidraulico,
-      totalAceiteTransmision,
-      totalAceitesTodos,
-      totalGrasa,
-      totalHorasDifK,
-      promedioConsumoHora,
-      entradasGasoil,
-      entradasAceite,
-      saldoGasoilEstimado: entradasGasoil - totalGasoil,
-      porObra,
-      porMaquina,
-      serviciosCompletados: orders.filter((o) => o.estado === 'COMPLETADO').length,
-      serviciosPendientes: orders.filter((o) => o.estado !== 'COMPLETADO').length,
-      dispatchesCount: dispatches.length,
-      entriesCount: entries.length,
-    };
-  },
 
   // --- MÓDULO IMPORTADOR & GESTIÓN DE BASE DE DATOS ACCESS ---
-  async getTableCounts(): Promise<Record<StorageTableKey, number>> {
-    const [
-      machines,
-      totalizers,
-      services,
-      orders,
-      articles,
-      dailyReports,
-      dispatches,
-      pettyCash,
-      suppliers,
-      fundRequests,
-    ] = await Promise.all([
-      this.getMachines(),
-      this.getTotalizers(),
-      this.getServiceRecords(),
-      this.getOrders(),
-      this.getArticles(),
-      this.getDailyReports(),
-      this.getDispatches(),
-      this.getPettyCashExpenses(),
-      this.getSuppliers(),
-      this.getFundRequests(),
-    ]);
 
-    return {
-      MACHINES: machines.length,
-      TOTALIZERS: totalizers.length,
-      SERVICES: services.length,
-      ORDERS: orders.length,
-      ARTICLES: articles.length,
-      DAILY_REPORTS: dailyReports.length,
-      DISPATCHES: dispatches.length,
-      PETTY_CASH: pettyCash.length,
-      SUPPLIERS: suppliers.length,
-      FUND_REQUESTS: fundRequests.length,
-    };
-  },
 
-  async importTableData(
-    tableKey: StorageTableKey,
-    records: any[],
-    mode: 'replace' | 'append' = 'replace'
-  ): Promise<{ count: number; table: StorageTableKey }> {
-    await mockLatency(200);
-    const storageKey = STORAGE_KEYS[tableKey];
-    
-    // Normalizar inteligentemente los registros para garantizar que campos esenciales nunca sean undefined o NaN
-    const normalizedRecords = records.map((rec, idx) => normalizeRecordForTable(tableKey, rec, idx));
-    let finalRecords = normalizedRecords;
 
-    if (mode === 'append') {
-      const existing = loadFromStorage<any[]>(storageKey, []);
-      finalRecords = [...existing, ...normalizedRecords];
-    }
 
-    saveToStorage(storageKey, finalRecords);
 
-    // Notificar a componentes activos
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: finalRecords.length } }));
-    }
 
-    return { count: finalRecords.length, table: tableKey };
-  },
 
-  async exportAllDatabase(): Promise<Record<StorageTableKey, any[]>> {
-    await mockLatency(200);
-    return {
-      MACHINES: await this.getMachines(),
-      TOTALIZERS: await this.getTotalizers(),
-      SERVICES: await this.getServiceRecords(),
-      ORDERS: await this.getOrders(),
-      ARTICLES: await this.getArticles(),
-      DAILY_REPORTS: await this.getDailyReports(),
-      DISPATCHES: await this.getDispatches(),
-      PETTY_CASH: await this.getPettyCashExpenses(),
-      SUPPLIERS: await this.getSuppliers(),
-      FUND_REQUESTS: await this.getFundRequests(),
-    };
-  },
 
-  async importFullDatabase(backup: Record<string, any[]>): Promise<{ importedTables: string[] }> {
-    await mockLatency(300);
-    const imported: string[] = [];
 
-    for (const [key, value] of Object.entries(backup)) {
-      const upperKey = key.toUpperCase() as StorageTableKey;
-      if (STORAGE_KEYS[upperKey] && Array.isArray(value)) {
-        saveToStorage(STORAGE_KEYS[upperKey], value);
-        imported.push(upperKey);
-      }
-    }
-
-    return { importedTables: imported };
-  },
-
-  async getTableData(tableKey: StorageTableKey): Promise<any[]> {
-    await mockLatency(100);
-    return loadFromStorage<any[]>(STORAGE_KEYS[tableKey], []);
-  },
-
-  async clearTable(tableKey: StorageTableKey): Promise<void> {
-    await mockLatency(150);
-    saveToStorage(STORAGE_KEYS[tableKey], []);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: 0 } }));
-    }
-  },
-
-  async deleteRecordFromTable(tableKey: StorageTableKey, identifier: string | number): Promise<boolean> {
-    await mockLatency(100);
-    const list = loadFromStorage<any[]>(STORAGE_KEYS[tableKey], []);
-    const idStr = String(identifier).toLowerCase();
-    const updated = list.filter((item) => {
-      if (item.id !== undefined && String(item.id).toLowerCase() === idStr) return false;
-      if (item.codmaq !== undefined && String(item.codmaq).toLowerCase() === idStr) return false;
-      if (item.pedido !== undefined && String(item.pedido).toLowerCase() === idStr) return false;
-      if (item.codigo !== undefined && String(item.codigo).toLowerCase() === idStr) return false;
-      if (item.numeroEnvio !== undefined && String(item.numeroEnvio).toLowerCase() === idStr) return false;
-      if (item.numeroSolicitud !== undefined && String(item.numeroSolicitud).toLowerCase() === idStr) return false;
-      if (item.codigoProveedor !== undefined && String(item.codigoProveedor).toLowerCase() === idStr) return false;
-      if (item.comprobanteNumero !== undefined && String(item.comprobanteNumero).toLowerCase() === idStr) return false;
-      return true;
-    });
-    saveToStorage(STORAGE_KEYS[tableKey], updated);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { tableKey, count: updated.length } }));
-    }
-    return true;
-  },
-
-  async clearAllDatabase(): Promise<void> {
-    await mockLatency(300);
-    Object.values(STORAGE_KEYS).forEach((key) => {
-      saveToStorage(key, []);
-    });
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { all: true } }));
-    }
-  },
-
-  async resetToDemoData(): Promise<void> {
-    await mockLatency(300);
-    saveToStorage(STORAGE_KEYS.MACHINES, INITIAL_MACHINES);
-    saveToStorage(STORAGE_KEYS.TOTALIZERS, INITIAL_TOTALIZERS);
-    saveToStorage(STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
-    saveToStorage(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
-    saveToStorage(STORAGE_KEYS.ARTICLES, INITIAL_ARTICLES);
-    saveToStorage(STORAGE_KEYS.DAILY_REPORTS, INITIAL_DAILY_REPORTS);
-    saveToStorage(STORAGE_KEYS.DISPATCHES, INITIAL_DISPATCHES);
-    saveToStorage(STORAGE_KEYS.PETTY_CASH, INITIAL_PETTY_CASH);
-    saveToStorage(STORAGE_KEYS.SUPPLIERS, INITIAL_SUPPLIERS);
-    saveToStorage(STORAGE_KEYS.FUND_REQUESTS, INITIAL_FUND_REQUESTS);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('erp-database-updated', { detail: { all: true, reset: true } }));
-    }
-  },
-
-  async resetDatabase(): Promise<void> {
-    await this.resetToDemoData();
-  },
 };

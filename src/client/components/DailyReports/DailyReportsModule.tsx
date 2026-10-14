@@ -24,18 +24,12 @@ import {
   User,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { DailyReport, DispatchVoucher, Machine } from '../../types/erp';
+import { DailyReport, Machine } from '../../../shared/erp';
 import { formatHours } from '../../utils/legacyCalculations';
 
-interface DailyReportsModuleProps {
-  onOpenReport: (reportName: string, data: any) => void;
-}
-
-export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenReport }) => {
+export const DailyReportsModule: React.FC = () => {
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
-  const [dispatches, setDispatches] = useState<DispatchVoucher[]>([]);
-  const [currentDispatchIdx, setCurrentDispatchIdx] = useState<number>(0);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
@@ -50,13 +44,8 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
   const loadData = async () => {
     setLoading(true);
     try {
-      const [repList, dispList, machList] = await Promise.all([
-        ErpApi.getDailyReports(),
-        ErpApi.getDispatches(),
-        ErpApi.getMachines(),
-      ]);
+      const [repList, machList] = await Promise.all([ErpApi.getDailyReports(), ErpApi.getMachines()]);
       setReports(repList);
-      setDispatches(dispList);
       setMachines(machList);
       if (repList.length > 0) {
         setSelectedReport(repList[0]);
@@ -105,13 +94,6 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
     setSelectedReport(newRec);
   };
 
-  // Reemplazo de Form_ENVIO -> Comando36_Click(): DoCmd.GoToRecord , , acNext
-  const handleNextDispatch = () => {
-    if (dispatches.length === 0) return;
-    const nextIdx = (currentDispatchIdx + 1) % dispatches.length;
-    setCurrentDispatchIdx(nextIdx);
-  };
-
   // Actualización de horas con cálculo automático en AfterUpdate
   const handleHorasChange = (type: 'inicio' | 'fin', val: number) => {
     if (!selectedReport) return;
@@ -142,7 +124,6 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
 
   // Lista única de choferes registrados para el combo
   const uniqueChoferes = Array.from(new Set(reports.map((r) => r.chofer)));
-  const activeDispatch = dispatches[currentDispatchIdx];
 
   if (loading) {
     return (
@@ -160,7 +141,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
         {/* Cuadro combinado 92 */}
         <div className="flex items-center space-x-3">
           <label htmlFor="combo-chofer" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            [CHOFER] Buscar Registro:
+            Buscar por chofer:
           </label>
           <select
             id="combo-chofer"
@@ -183,10 +164,10 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
             id="btn-new-daily-report"
             onClick={handleCreateNewReport}
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors"
-            title="Command24_Click: DoCmd.GoToRecord , , acNewRec"
+
           >
             <Plus className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-            Nuevo Parte Diario (acNewRec)
+            Nuevo parte
           </button>
 
           <button
@@ -210,7 +191,7 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
       </div>
 
       {/* Detalle del Parte Diario e Informes */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {selectedReport ? (
           <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-6">
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
@@ -346,68 +327,6 @@ export const DailyReportsModule: React.FC<DailyReportsModuleProps> = ({ onOpenRe
           </div>
         )}
 
-        {/* Panel Lateral: Form_ENVIO (Remitos y Despachos con Comando36_Click: acNext) */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-5">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <div>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase">
-                Remitos
-              </span>
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mt-1">
-                Remitos de Despacho
-              </h3>
-            </div>
-            {/* Comando36_Click -> acNext */}
-            <button
-              onClick={handleNextDispatch}
-              className="px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
-              title="Comando36_Click: DoCmd.GoToRecord , , acNext"
-            >
-              Siguiente &gt;
-            </button>
-          </div>
-
-          {activeDispatch ? (
-            <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex justify-between items-center">
-                <span className="font-mono font-bold text-slate-900">{activeDispatch.numeroEnvio}</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  {activeDispatch.estado}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">DESTINO:</span>
-                <span className="font-semibold text-slate-800">{activeDispatch.destino}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">RECEPTOR EN OBRA:</span>
-                <span className="text-slate-800">{activeDispatch.receptor}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">TRANSPORTISTA:</span>
-                <span className="text-slate-800">{activeDispatch.chofer}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">DETALLE DE MATERIALES:</span>
-                <p className="text-slate-700 italic bg-white p-2 rounded border border-slate-200 text-[11px]">
-                  {activeDispatch.detalleMateriales}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 text-center py-4">No hay envíos activos.</p>
-          )}
-
-          <div className="pt-2">
-            <button
-              onClick={() => onOpenReport('CONSUMOS 09', selectedReport)}
-              className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
-            >
-              <span className="font-semibold text-slate-800">Informe Diario Consolidado</span>
-              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

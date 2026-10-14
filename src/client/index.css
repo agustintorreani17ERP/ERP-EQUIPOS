@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/*
+ * Sistema de diseño.
+ * - Neutros: slate. Todas las pantallas que usaban "stone" quedan en la misma escala.
+ * - Marca: índigo sobrio (las clases blue-* de pantallas anteriores se mapean a la marca).
+ * - Estados: emerald (bien), amber (atención), rose (problema).
+ * - Un solo radio y una sola sombra suave para todo.
+ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* stone → slate */
+  --color-stone-50: #f8fafc;
+  --color-stone-100: #f1f5f9;
+  --color-stone-200: #e2e8f0;
+  --color-stone-300: #cbd5e1;
+  --color-stone-400: #94a3b8;
+  --color-stone-500: #64748b;
+  --color-stone-600: #475569;
+  --color-stone-700: #334155;
+  --color-stone-800: #1e293b;
+  --color-stone-900: #0f172a;
+
+  /* blue → marca */
+  --color-blue-50: #eef2ff;
+  --color-blue-100: #e0e7ff;
+  --color-blue-200: #c7d2fe;
+  --color-blue-300: #a5b4fc;
+  --color-blue-400: #818cf8;
+  --color-blue-500: #6366f1;
+  --color-blue-600: #4f46e5;
+  --color-blue-700: #4338ca;
+  --color-blue-800: #3730a3;
+  --color-blue-900: #312e81;
+
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: var(--font-sans);
+    letter-spacing: -0.006em;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 650;
+  }
+
+  .font-mono,
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Cifras en fuente monoespaciada (alinean columna por columna) */
+  .font-mono {
+    font-family: var(--font-mono);
+    font-size: 0.95em;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+}
+
+/* Impresión de comprobantes: solo se imprime el área marcada */
+@media print {
+  body.print-doc * {
+    visibility: hidden;
+  }
+  body.print-doc .print-area,
+  body.print-doc .print-area * {
+    visibility: visible;
+  }
+  body.print-doc .print-area {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+}

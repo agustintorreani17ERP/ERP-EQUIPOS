@@ -27,16 +27,10 @@ import {
   Wrench,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { EquipmentServiceRecord, Machine } from '../../types/erp';
+import { EquipmentServiceRecord, Machine } from '../../../shared/erp';
 import { formatCurrency, formatHours } from '../../utils/legacyCalculations';
 
-interface MaintenanceServicesModuleProps {
-  onOpenReport: (reportName: string, data: any) => void;
-}
-
-export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps> = ({
-  onOpenReport,
-}) => {
+export const MaintenanceServicesModule: React.FC = () => {
   const [services, setServices] = useState<EquipmentServiceRecord[]>([]);
   const [selectedService, setSelectedService] = useState<EquipmentServiceRecord | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -208,10 +202,10 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
             id="btn-new-service-record"
             onClick={handleCreateNewServiceRecord}
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors"
-            title="Command162_Click: DoCmd.GoToRecord , , acNewRec"
+
           >
             <Plus className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-            Nuevo Servicio (acNewRec)
+            Nuevo servicio
           </button>
 
           <button
@@ -232,13 +226,6 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
             )}
           </button>
 
-          <button
-            onClick={() => onOpenReport('Consulta servicio', selectedService)}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-          >
-            <FileCheck className="w-3.5 h-3.5 mr-1 text-slate-500" />
-            Informe Servicio
-          </button>
         </div>
       </div>
 
@@ -284,7 +271,7 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
             {/* Datos de Cabecera del Servicio */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Equipo [CODMAQ]</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Equipo</label>
                 <select
                   disabled={!selectedService.allowEdit}
                   value={selectedService.codmaq}
@@ -448,7 +435,7 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
             </div>
           </div>
 
-          {/* Panel Lateral: Repuestos Consumidos e Informes */}
+          {/* Repuestos consumidos */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-5">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-3">
               Repuestos y Materiales Asignados
@@ -474,23 +461,6 @@ export const MaintenanceServicesModule: React.FC<MaintenanceServicesModuleProps>
               )}
             </div>
 
-            <div className="pt-4 border-t border-slate-100 space-y-2">
-              <h4 className="text-xs font-bold text-slate-700 uppercase">Consultas e Informes</h4>
-              <button
-                onClick={() => onOpenReport('Consulta servicio', selectedService)}
-                className="w-full text-left p-2 rounded border border-slate-200 hover:bg-slate-50 text-xs flex justify-between items-center"
-              >
-                <span>Consulta servicio (acPreview)</span>
-                <FileCheck className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-              <button
-                onClick={() => onOpenReport('SERVICIO CONSULTA', selectedService)}
-                className="w-full text-left p-2 rounded border border-slate-200 hover:bg-slate-50 text-xs flex justify-between items-center"
-              >
-                <span>Servicio Consulta (Comando613)</span>
-                <FileCheck className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            </div>
           </div>
         </div>
       )}

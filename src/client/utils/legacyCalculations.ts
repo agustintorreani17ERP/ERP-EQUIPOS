@@ -4,7 +4,7 @@
  * clases (.cls) y procedimientos AfterUpdate/Click de Microsoft Access VBA.
  */
 
-import { FundRequest, MaterialOrder, OrderItem, TotalizerReading } from '../types/erp';
+import { FundRequest, MaterialOrder, OrderItem, TotalizerReading } from '../../shared/erp';
 
 /**
  * Migración directa de Form_A -> TOTALIZADOR_AfterUpdate():

@@ -20,14 +20,10 @@ import {
   AlertCircle,
   Building,
   Check,
-  CheckCircle,
   CreditCard,
   DollarSign,
-  Download,
   Filter,
-  Mail,
   Plus,
-  Printer,
   Receipt,
   Search,
   Send,
@@ -35,18 +31,10 @@ import {
   Wallet,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { FundRequest, PettyCashExpense, SupplierAccount } from '../../types/erp';
+import { FundRequest, PettyCashExpense, SupplierAccount } from '../../../shared/erp';
 import { formatCurrency, validateFundRequest } from '../../utils/legacyCalculations';
 
-interface FinanceModuleProps {
-  onOpenReport: (reportName: string, data: any) => void;
-  onSendEmail: (reportName: string) => Promise<void>;
-}
-
-export const FinanceModule: React.FC<FinanceModuleProps> = ({
-  onOpenReport,
-  onSendEmail,
-}) => {
+export const FinanceModule: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'SFONDOS' | 'CAJA_CHICA' | 'PROVEEDORES'>('SFONDOS');
   const [fundRequests, setFundRequests] = useState<FundRequest[]>([]);
   const [pettyCash, setPettyCash] = useState<PettyCashExpense[]>([]);
@@ -68,8 +56,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
   });
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  // Notificación de email enviado (DoCmd.SendObject)
-  const [emailStatus, setEmailStatus] = useState<{ id: string; message: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -94,21 +80,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
       console.error('Error cargando tesorería:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Reemplazo de Comando43_Click() en Form_SFONDOS:
-  // DoCmd.SendObject acReport, "SF"
-  const handleSendObjectEmail = async (sf: FundRequest) => {
-    try {
-      await ErpApi.simulateSendObjectEmail(sf.id);
-      setEmailStatus({
-        id: sf.id,
-        message: `Solicitud ${sf.numeroSolicitud} enviada por correo a Tesorería`,
-      });
-      setTimeout(() => setEmailStatus(null), 3500);
-    } catch (err) {
-      console.error('Error enviando reporte por correo:', err);
     }
   };
 
@@ -215,23 +186,9 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => onOpenReport('POR PROVEEDOR FECHADO', fundRequests[0])}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors"
-          >
-            <Download className="w-3.5 h-3.5 mr-1 text-slate-500" />
-            Por Proveedor Fechado
-          </button>
         </div>
       </div>
 
-      {/* Alerta de Envío de Correo */}
-      {emailStatus && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg flex items-center space-x-2 text-xs animate-in fade-in">
-          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{emailStatus.message}</span>
-        </div>
-      )}
 
       {/* VISTA 1: SOLICITUDES DE FONDOS */}
       {activeTab === 'SFONDOS' && (
@@ -292,7 +249,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                   <th className="p-3">Concepto</th>
                   <th className="p-3 text-right">Monto</th>
                   <th className="p-3 text-center">Estado</th>
-                  <th className="p-3 text-right">Acciones VBA Migradas</th>
+                  <th className="p-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -335,23 +292,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                         </button>
                       )}
 
-                      {/* Comando40_Click -> DoCmd.OpenReport "SF" */}
-                      <button
-                        onClick={() => onOpenReport('SF', sf)}
-                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold transition-colors"
-                        title="Comando40_Click: DoCmd.OpenReport 'SF', acPreview"
-                      >
-                        Ver SF
-                      </button>
 
-                      {/* Comando43_Click -> DoCmd.SendObject acReport, "SF" */}
-                      <button
-                        onClick={() => handleSendObjectEmail(sf)}
-                        className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors inline-block align-middle"
-                        title="Comando43_Click: DoCmd.SendObject acReport, 'SF'"
-                      >
-                        <Mail className="w-4 h-4" />
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -377,14 +318,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
               <p className="text-slate-500">Comprobantes, vales y facturas de imputación directa.</p>
             </div>
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => onOpenReport('CAJA CHICA', pettyCash)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                title="Comando40_Click: DoCmd.OpenReport 'CAJA CHICA', acPreview"
-              >
-                <Printer className="w-3.5 h-3.5 mr-1" />
-                Informe Caja Chica
-              </button>
               <div className="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-mono text-xs">
                 <span className="text-slate-500 mr-2">Total Erogado:</span>
                 <span className="font-bold text-slate-900">{formatCurrency(totalPettyCashAmount)}</span>
@@ -439,14 +372,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                 Gestión de compromisos financieros por suplidor.
               </p>
             </div>
-            <button
-              onClick={() => onOpenReport('ESTADO DE CUENTAS POR SUPLIDOR', suppliers[0])}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="Comando47_Click: DoCmd.OpenReport 'ESTADO DE CUENTAS POR SUPLIDOR'"
-            >
-              <Printer className="w-3.5 h-3.5 mr-1" />
-              Estado de Cuentas por Suplidor (Comando47)
-            </button>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -459,7 +384,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                   <th className="p-3">Condición de Pago</th>
                   <th className="p-3 text-center">Facturas Pend.</th>
                   <th className="p-3 text-right">Saldo Pendiente</th>
-                  <th className="p-3 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -474,14 +398,6 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
                     </td>
                     <td className="p-3 text-right font-mono font-bold text-slate-900 text-sm">
                       {formatCurrency(sup.saldoPendiente)}
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => onOpenReport('ESTADO DE CUENTAS POR SUPLIDOR', sup)}
-                        className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[11px] font-semibold transition-colors"
-                      >
-                        Ver Estado
-                      </button>
                     </td>
                   </tr>
                 ))}

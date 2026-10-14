@@ -20,9 +20,8 @@ import {
   Users,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { Supplier } from '../../types/erp';
+import { Supplier } from '../../../shared/erp';
 import { formatCurrency } from '../../utils/legacyCalculations';
-import { ColumnDef, DataSheetGrid } from '../Common/DataSheetGrid';
 
 interface WorksiteItem {
   id: string;
@@ -69,35 +68,11 @@ const INITIAL_WORKSITES: WorksiteItem[] = [
 ];
 
 export const SuppliersModule: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'PROVEEDORES' | 'OBRAS' | 'PLANILLA_ACCESS'>('PROVEEDORES');
+  const [activeTab, setActiveTab] = useState<'PROVEEDORES' | 'OBRAS'>('PROVEEDORES');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [worksites, setWorksites] = useState<WorksiteItem[]>(INITIAL_WORKSITES);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
-
-  const supplierColumns: ColumnDef<Supplier>[] = [
-    { key: 'codigoProveedor', label: 'Código Prov.', width: 'w-28' },
-    { key: 'nombreProveedor', label: 'Razón Social / Nombre', width: 'w-64' },
-    { key: 'cuit', label: 'CUIT / RUC', width: 'w-36' },
-    { key: 'condicionPago', label: 'Condición de Pago', width: 'w-40' },
-    { key: 'saldoPendiente', label: 'Saldo Pendiente ($)', type: 'number', width: 'w-36' },
-    { key: 'facturasPendientes', label: 'Facturas Pend.', type: 'number', width: 'w-28' },
-  ];
-
-  const createEmptySupplier = (): Supplier => ({
-    id: `sup-${Date.now()}`,
-    codigoProveedor: `PRV-${Date.now().toString().slice(-4)}`,
-    nombreProveedor: 'NUEVO PROVEEDOR',
-    cuit: '30-00000000-0',
-    saldoPendiente: 0,
-    facturasPendientes: 0,
-    condicionPago: '30 DIAS',
-  });
-
-  const handleSaveSupplierGrid = async (updated: Supplier[]) => {
-    await ErpApi.importTableData('SUPPLIERS', updated, 'replace');
-    await loadSuppliers();
-  };
 
   // Modal para Nuevo Proveedor
   const [showSupplierModal, setShowSupplierModal] = useState<boolean>(false);
@@ -218,21 +193,9 @@ export const SuppliersModule: React.FC = () => {
             <span>Frentes de Obra y Destinos ({worksites.length})</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('PLANILLA_ACCESS')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
-              activeTab === 'PLANILLA_ACCESS'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Planilla Base de Datos (Access / Excel)</span>
-          </button>
         </div>
 
         <div className="flex items-center gap-3">
-          {activeTab !== 'PLANILLA_ACCESS' && (
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
@@ -243,7 +206,6 @@ export const SuppliersModule: React.FC = () => {
                 className="pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
               />
             </div>
-          )}
 
           {activeTab === 'PROVEEDORES' ? (
             <button
@@ -348,21 +310,6 @@ export const SuppliersModule: React.FC = () => {
         </div>
       )}
 
-      {/* PESTAÑA 3: PLANILLA HOJA DE DATOS ACCESS / EXCEL */}
-      {activeTab === 'PLANILLA_ACCESS' && (
-        <div className="space-y-4">
-          <DataSheetGrid<Supplier>
-            title="Planilla de Proveedores y Cuentas"
-            subtitle="Edite directamente en las celdas, agregue filas al final o modifique condiciones tal como en Microsoft Access o Excel"
-            columns={supplierColumns}
-            data={suppliers}
-            onSave={handleSaveSupplierGrid}
-            createEmptyRow={createEmptySupplier}
-            idKey="id"
-            exportFileName="planilla_proveedores"
-          />
-        </div>
-      )}
 
       {/* MODAL NUEVO PROVEEDOR */}
       {showSupplierModal && (

@@ -25,7 +25,6 @@ import {
   Package,
   PackageCheck,
   Plus,
-  Printer,
   Receipt,
   Save,
   Search,
@@ -33,18 +32,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { Article, Machine, MaterialOrder, OrderItem } from '../../types/erp';
+import { Article, Machine, MaterialOrder, OrderItem } from '../../../shared/erp';
 import {
   calculateOrderItemTotal,
   calculateOrderTotals,
   formatCurrency,
 } from '../../utils/legacyCalculations';
 
-interface OrdersModuleProps {
-  onOpenReport: (reportName: string, data: any) => void;
-}
 
-export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
+export const OrdersModule: React.FC = () => {
   const [orders, setOrders] = useState<MaterialOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<MaterialOrder | null>(null);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -318,7 +314,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
           {/* Cuadro combinado 26 / 38 (Búsqueda por [PEDIDO]) */}
           <div className="flex items-center space-x-2">
             <label htmlFor="combo-pedido" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              [PEDIDO]:
+              Pedido:
             </label>
             <select
               id="combo-pedido"
@@ -337,7 +333,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
           {/* Cuadro combinado 40 (Búsqueda por [ARTICULO]) */}
           <div className="flex items-center space-x-2">
             <label htmlFor="combo-articulo" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              [ARTICULO]:
+              Artículo:
             </label>
             <select
               id="combo-articulo"
@@ -361,7 +357,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
           <button
             onClick={handleGoToLastOrder}
             className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-            title="Comando42_Click: DoCmd.GoToRecord , , acLast"
+
           >
             Último Registro
           </button>
@@ -371,10 +367,10 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
             id="btn-new-order"
             onClick={handleCreateNewOrder}
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors"
-            title="Comando43_Click: DoCmd.GoToRecord , , acNewRec"
+
           >
             <Plus className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-            Nuevo Pedido (acNewRec)
+            Nuevo pedido
           </button>
 
           <button
@@ -398,7 +394,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
           <button
             onClick={() => setShowNewArticleModal(true)}
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg transition-colors"
-            title="Comando128_Click: DoCmd.OpenForm 'AGREGAR ARTICULO'"
+
           >
             <Package className="w-3.5 h-3.5 mr-1 text-indigo-600" />
             + Agregar Artículo
@@ -466,7 +462,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Máquina Destino [CODMAQ]</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Máquina destino</label>
                 <select
                   value={selectedOrder.codmaqDestino || ''}
                   onChange={(e) => setSelectedOrder({ ...selectedOrder, codmaqDestino: e.target.value })}
@@ -614,75 +610,6 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
               </div>
             </div>
           </div>
-
-          {/* Panel Lateral: Reportes de Pedidos y Recepciones */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-3">
-              Informes de Pedidos (Access Reports)
-            </h3>
-
-            <div className="space-y-2">
-              <button
-                onClick={() => onOpenReport('PEDIDO DE MATERIALES A4', selectedOrder)}
-                className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors flex items-center justify-between text-xs"
-                title="Comando48_Click: DoCmd.OpenReport 'PEDIDO DE MATERIALES A4'"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">Pedido de Materiales A4</div>
-                  <span className="text-[10px] text-slate-400">Comando48_Click</span>
-                </div>
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => onOpenReport('PEDIDO DE MATERIALES', selectedOrder)}
-                className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors flex items-center justify-between text-xs"
-                title="Comando41_Click / Comando106_Click"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">Pedido de Materiales Estándar</div>
-                  <span className="text-[10px] text-slate-400">Comando41 & Comando106</span>
-                </div>
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => onOpenReport('RECEPCIONES', selectedOrder)}
-                className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors flex items-center justify-between text-xs"
-                title="Comando107_Click: DoCmd.OpenReport 'RECEPCIONES'"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">Comprobante de Recepciones</div>
-                  <span className="text-[10px] text-slate-400">Comando107 & Comando112</span>
-                </div>
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => onOpenReport('RECEPCIONES PAPEL COMUN', selectedOrder)}
-                className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors flex items-center justify-between text-xs"
-                title="Comando116_Click"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">Recepciones Papel Común</div>
-                  <span className="text-[10px] text-slate-400">Comando116 (acViewReport)</span>
-                </div>
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => onOpenReport('PEDIDOS PENDIENTES', selectedOrder)}
-                className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-colors flex items-center justify-between text-xs"
-                title="Comando117_Click"
-              >
-                <div>
-                  <div className="font-semibold text-slate-800">Pedidos Pendientes de Entrega</div>
-                  <span className="text-[10px] text-slate-400">Comando117 (acViewReport)</span>
-                </div>
-                <Printer className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -704,7 +631,7 @@ export const OrdersModule: React.FC<OrdersModuleProps> = ({ onOpenReport }) => {
 
             <form onSubmit={handleCreateArticle} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Código [ARTICULO] *</label>
+                <label className="block font-semibold text-slate-700 mb-1">Código *</label>
                 <input
                   type="text"
                   required

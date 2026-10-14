@@ -21,77 +21,16 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ErpApi } from '../../services/api';
-import { Article } from '../../types/erp';
+import { Article } from '../../../shared/erp';
 import { formatCurrency } from '../../utils/legacyCalculations';
-import { ColumnDef, DataSheetGrid } from '../Common/DataSheetGrid';
 
-interface StockModuleProps {
-  onOpenReport?: (reportName: string, data: any) => void;
-}
 
-export const StockModule: React.FC<StockModuleProps> = ({ onOpenReport }) => {
-  const [viewMode, setViewMode] = useState<'CATALOGO' | 'PLANILLA_ACCESS'>('CATALOGO');
+export const StockModule: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('TODAS');
   const [showLowStockOnly, setShowLowStockOnly] = useState<boolean>(false);
-
-  const articleColumns: ColumnDef<Article>[] = [
-    { key: 'codigo', label: 'Código', width: 'w-32' },
-    { key: 'descripcion', label: 'Descripción del Repuesto / Material', width: 'w-64' },
-    {
-      key: 'categoria',
-      label: 'Categoría',
-      type: 'select',
-      width: 'w-36',
-      options: [
-        { value: 'FILTROS', label: 'FILTROS' },
-        { value: 'LUBRICANTES', label: 'LUBRICANTES' },
-        { value: 'CORREAS', label: 'CORREAS' },
-        { value: 'DESGASTE', label: 'DESGASTE' },
-        { value: 'ELECTRICIDAD', label: 'ELECTRICIDAD' },
-        { value: 'FERRETERIA', label: 'FERRETERÍA' },
-        { value: 'MANGUERAS', label: 'MANGUERAS' },
-        { value: 'RODAMIENTOS', label: 'RODAMIENTOS' },
-        { value: 'OTROS', label: 'OTROS' },
-      ],
-    },
-    { key: 'stockActual', label: 'Stock Actual', type: 'number', width: 'w-24' },
-    { key: 'stockMinimo', label: 'Stock Mínimo', type: 'number', width: 'w-24' },
-    {
-      key: 'unidad',
-      label: 'Unidad',
-      type: 'select',
-      width: 'w-24',
-      options: [
-        { value: 'U', label: 'Unidad (U)' },
-        { value: 'L', label: 'Litros (L)' },
-        { value: 'KG', label: 'Kilos (KG)' },
-        { value: 'M', label: 'Metros (M)' },
-        { value: 'JUEGO', label: 'Juego' },
-      ],
-    },
-    { key: 'precioReferencia', label: 'Precio Ref. ($)', type: 'number', width: 'w-32' },
-    { key: 'ubicacionDeposito', label: 'Ubicación / Estantería', width: 'w-44' },
-  ];
-
-  const createEmptyArticle = (): Article => ({
-    id: `art-${Date.now()}`,
-    codigo: `ART-${Date.now().toString().slice(-4)}`,
-    descripcion: 'NUEVO REPUESTO / MATERIAL',
-    categoria: 'REPUESTOS',
-    stockActual: 0,
-    stockMinimo: 2,
-    unidad: 'U',
-    precioReferencia: 0,
-    ubicacionDeposito: 'Depósito Taller',
-  });
-
-  const handleSaveArticleGrid = async (updated: Article[]) => {
-    await ErpApi.importTableData('ARTICLES', updated, 'replace');
-    await loadArticles();
-  };
 
   // Modal para Nuevo Repuesto
   const [showNewModal, setShowNewModal] = useState<boolean>(false);
@@ -187,58 +126,16 @@ export const StockModule: React.FC<StockModuleProps> = ({ onOpenReport }) => {
 
   return (
     <div className="space-y-6">
-      {/* Selector de Modo de Vista */}
-      <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 gap-3">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setViewMode('CATALOGO')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
-              viewMode === 'CATALOGO'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Boxes className="w-4 h-4" />
-            <span>Catálogo e Inventario ({articles.length})</span>
-          </button>
-
-          <button
-            onClick={() => setViewMode('PLANILLA_ACCESS')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
-              viewMode === 'PLANILLA_ACCESS'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Planilla Base de Datos (Access / Excel)</span>
-          </button>
-        </div>
-
-        {viewMode === 'CATALOGO' && (
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuevo Ítem</span>
-          </button>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">{articles.length} ítems en catálogo</p>
+        <button
+          onClick={() => setShowNewModal(true)}
+          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium shadow-xs flex items-center gap-1.5"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Nuevo ítem</span>
+        </button>
       </div>
-
-      {viewMode === 'PLANILLA_ACCESS' ? (
-        <DataSheetGrid<Article>
-          title="Planilla de Artículos, Repuestos e Insumos"
-          subtitle="Edite directamente en las celdas, agregue filas al final o modifique stocks y precios como en Microsoft Access o Excel"
-          columns={articleColumns}
-          data={articles}
-          onSave={handleSaveArticleGrid}
-          createEmptyRow={createEmptyArticle}
-          idKey="id"
-          exportFileName="planilla_repuestos_materiales"
-        />
-      ) : (
-        <>
           {/* Barra superior de métricas de stock */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center space-x-3">
@@ -345,7 +242,7 @@ export const StockModule: React.FC<StockModuleProps> = ({ onOpenReport }) => {
                     filtered.map((art) => {
                       const isLow = art.stockActual <= art.stockMinimo;
                       return (
-                        <tr key={art.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={art.id ?? art.codigo} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3 px-4 font-mono font-bold text-blue-900">{art.codigo}</td>
                           <td className="py-3 px-4 font-semibold text-slate-900">{art.descripcion}</td>
                           <td className="py-3 px-4">
@@ -392,8 +289,6 @@ export const StockModule: React.FC<StockModuleProps> = ({ onOpenReport }) => {
               </table>
             </div>
           </div>
-        </>
-      )}
 
       {/* MODAL NUEVO ARTÍCULO */}
       {showNewModal && (

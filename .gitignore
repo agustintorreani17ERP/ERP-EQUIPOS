@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Base local de desarrollo (PGlite)
+.data/
