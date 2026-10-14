@@ -1,8 +1,0 @@
-{
-  "name": "ERP Gestión Operativa",
-  "description": "Migración web de sistema ERP legacy de Microsoft Access a React y TypeScript con gestión de flota, servicios de maquinaria, pedidos y tesorería.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
