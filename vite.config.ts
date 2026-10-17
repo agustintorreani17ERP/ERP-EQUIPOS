@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig} from 'vitest/config';
 
 // Puertos propios de Taller: el 3000 lo usa otra app local (sistema-erp).
 const CLIENT_PORT = 3100;
@@ -14,6 +14,12 @@ export default defineConfig(() => ({
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
+  },
+  // Cada suite del servidor levanta su propia base PGlite y aplica todas las migraciones:
+  // con varias en paralelo el arranque supera los 10 s que Vitest da por defecto.
+  test: {
+    hookTimeout: 60_000,
+    testTimeout: 30_000,
   },
   server: {
     port: CLIENT_PORT,

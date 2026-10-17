@@ -2,7 +2,7 @@
  * Menú lateral de Taller (mismo formato que InfraTrack): marca, grupos y pie.
  */
 import React from "react";
-import { Boxes, ClipboardList, Clock, LayoutDashboard, Truck, Users, Wallet, Wrench } from "lucide-react";
+import { Boxes, ClipboardList, Clock, Fuel, LayoutDashboard, Send, Truck, Upload, Users, Wallet, Wrench } from "lucide-react";
 import {
   Sidebar as SidebarRoot,
   SidebarContent,
@@ -16,7 +16,7 @@ import {
   useSidebar,
 } from "../../ui/sidebar";
 
-export type AppModule = "DASHBOARD" | "MACHINES" | "DAILY_REPORTS" | "SERVICES" | "ORDERS" | "STOCK" | "FINANCE" | "SUPPLIERS";
+export type AppModule = "DASHBOARD" | "MACHINES" | "DAILY_REPORTS" | "SERVICES" | "FUEL" | "ORDERS" | "STOCK" | "DISPATCH" | "FINANCE" | "SUPPLIERS" | "IMPORT";
 
 const GROUPS: { title: string; items: { id: AppModule; label: string; icon: React.ElementType }[] }[] = [
   {
@@ -26,6 +26,7 @@ const GROUPS: { title: string; items: { id: AppModule; label: string; icon: Reac
       { id: "MACHINES", label: "Flota", icon: Truck },
       { id: "DAILY_REPORTS", label: "Partes diarios", icon: Clock },
       { id: "SERVICES", label: "Mantenimiento", icon: Wrench },
+      { id: "FUEL", label: "Combustibles", icon: Fuel },
     ],
   },
   {
@@ -33,6 +34,7 @@ const GROUPS: { title: string; items: { id: AppModule; label: string; icon: Reac
     items: [
       { id: "ORDERS", label: "Pedidos", icon: ClipboardList },
       { id: "STOCK", label: "Stock", icon: Boxes },
+      { id: "DISPATCH", label: "Notas de envío", icon: Send },
     ],
   },
   {
@@ -40,6 +42,7 @@ const GROUPS: { title: string; items: { id: AppModule; label: string; icon: Reac
     items: [
       { id: "FINANCE", label: "Fondos", icon: Wallet },
       { id: "SUPPLIERS", label: "Proveedores", icon: Users },
+      { id: "IMPORT", label: "Importar planillas", icon: Upload },
     ],
   },
 ];

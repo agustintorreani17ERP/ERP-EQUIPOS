@@ -21,7 +21,10 @@ export interface DbHandle {
   close: () => Promise<void>;
 }
 
-const MIGRATION_0001 = new URL('./migrations/0001_init.sql', import.meta.url);
+const MIGRATIONS_DIR = new URL('./migrations/', import.meta.url);
+
+/** Migraciones en orden lexicográfico (0001_…, 0002_…). Cada una es idempotente. */
+const MIGRATION_FILES = ['0001_init.sql', '0002_base.sql', '0003_pedidos.sql', '0004_flota_partes.sql', '0005_fondos.sql', '0006_combustible.sql', '0007_mantenimiento.sql', '0008_notas_envio.sql', '0009_stock.sql', '0010_importacion.sql', '0011_numeracion_anual.sql', '0012_ordenes_importadas.sql', '0013_integracion_erp.sql'] as const;
 
 export function createDb(databaseUrl: string): DbHandle {
   const pool = new pg.Pool({ connectionString: databaseUrl });
@@ -64,9 +67,7 @@ export async function prepareLocalDev(handle: Pick<DbHandle, 'exec'>): Promise<v
         create role taller_app login;
       end if;
     end $$;
-    grant usage on schema public to taller_app;
-    grant select on companies to taller_app;
-    grant execute on function company_id_for_clerk_org(text) to taller_app;
+    ${APP_ROLE_GRANTS}
     insert into companies (id, clerk_org_id, name)
       values ('${DEV_COMPANY_ID}', 'org_dev', 'Empresa de desarrollo')
       on conflict do nothing;
@@ -87,8 +88,26 @@ export async function createTestDb(): Promise<DbHandle & { pglite: PGlite }> {
 }
 
 export async function migrate(handle: Pick<DbHandle, 'exec'>): Promise<void> {
-  await handle.exec(readFileSync(MIGRATION_0001, 'utf8'));
+  for (const file of MIGRATION_FILES) {
+    await handle.exec(readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8'));
+  }
+  // En producción el rol lo crea el administrador de la base; si existe, se le dan permisos
+  // sobre las tablas recién creadas. En desarrollo prepareLocalDev hace lo mismo.
+  await handle.exec(
+    `do $$ begin if exists (select 1 from pg_roles where rolname = 'taller_app') then ${APP_ROLE_GRANTS} end if; end $$;`,
+  );
 }
+
+/**
+ * Permisos del rol de la aplicación sobre las tablas de negocio. Las migraciones corren
+ * como dueño; el rol taller_app solo puede leer y escribir, y RLS filtra por empresa.
+ */
+export const APP_ROLE_GRANTS = `
+  grant usage on schema public to taller_app;
+  grant select, insert, update, delete on all tables in schema public to taller_app;
+  grant usage, select on all sequences in schema public to taller_app;
+  grant execute on function company_id_for_clerk_org(text) to taller_app;
+`;
 
 /**
  * Ejecuta `fn` en una transacción con app.company_id fijado a la empresa.

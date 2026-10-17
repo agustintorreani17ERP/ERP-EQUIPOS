@@ -1,266 +1,302 @@
 /**
  * @file components/Machines/MachinesModule.tsx
- * @description Flota: lista de máquinas, ficha con horómetro y estado de servicio.
- * Lectura de horómetro con DifK (horas desde la lectura anterior) y alta / baja de equipos.
+ * @description Flota: lista con búsqueda tolerante a espacios, vencimientos y ficha de máquina
+ * con datos, filtros y fluidos, lecturas de horómetro (con corrección explícita cuando se
+ * rechaza una lectura que baja) y ficha imprimible.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Gauge, Plus, Search, Trash2, Truck } from 'lucide-react';
-import { ErpApi } from '../../services/api';
-import { Machine, TotalizerReading } from '../../../shared/erp';
-import { evaluateMaintenanceDue, formatHours } from '../../utils/legacyCalculations';
-import { AppModule } from '../Navigation/Sidebar';
+import React, { useEffect, useState } from 'react';
+import { Gauge, Plus, Printer, Search, Tags, Truck } from 'lucide-react';
+import type { ComplianceStatus, MachineStatus, MeterUnit } from '../../../shared/fleet';
+import { describeError } from '../../services/http';
+import { fleetApi, type CategoryRef, type DueItem, type FleetMachine, type MachineDraft, type MachineFilters, type Reading } from '../../services/fleetApi';
+import { mastersApi, type Worksite } from '../../services/mastersApi';
+import { printArea } from '../../utils/print';
+import { formatDate, formatQty, todayIso } from '../../utils/format';
 import { Button, Card, EmptyState, Field, Modal, Page, PageHeader, StatusPill, cx, inputClass } from '../../ui';
+import type { AppModule } from '../Navigation/Sidebar';
 
-const STATUS_LABEL: Record<Machine['estado'], string> = {
-  OPERATIVA: 'Operativa',
-  EN_MANTENIMIENTO: 'En mantenimiento',
-  EN_REPARACION: 'En reparación',
+const STATUS_LABEL: Record<MachineStatus, string> = {
+  ACTIVA: 'Activa',
+  PARADA: 'Parada',
+  EN_DESUSO: 'En desuso',
   BAJA: 'De baja',
 };
 
-const STATUS_TONE: Record<Machine['estado'], 'good' | 'warn' | 'bad' | 'neutral'> = {
-  OPERATIVA: 'good',
-  EN_MANTENIMIENTO: 'warn',
-  EN_REPARACION: 'bad',
-  BAJA: 'neutral',
+const STATUS_TONE: Record<MachineStatus, 'good' | 'warn' | 'neutral' | 'bad'> = {
+  ACTIVA: 'good',
+  PARADA: 'warn',
+  EN_DESUSO: 'neutral',
+  BAJA: 'bad',
 };
 
-const SERVICE_INTERVAL_HOURS = 1000;
+const COMPLIANCE_LABEL: Record<ComplianceStatus, string> = {
+  VIGENTE: 'Vigente',
+  POR_VENCER: 'Por vencer',
+  VENCIDO: 'Vencido',
+  SIN_DATO: 'Sin dato',
+};
 
-const today = () => new Date().toISOString().slice(0, 10);
+const COMPLIANCE_TONE: Record<ComplianceStatus, 'good' | 'warn' | 'bad' | 'neutral'> = {
+  VIGENTE: 'good',
+  POR_VENCER: 'warn',
+  VENCIDO: 'bad',
+  SIN_DATO: 'neutral',
+};
 
-const emptyMachine = (): Machine => ({
-  id: '',
-  codmaq: '',
-  descripcion: '',
-  marca: '',
-  modelo: '',
-  numeroSerie: '',
-  anio: new Date().getFullYear(),
-  horasActuales: 0,
-  estado: 'OPERATIVA',
-  ubicacionActual: '',
-  ultimoServicioHoras: 0,
-  tipoMaquinaria: 'OTRO',
-});
+const SOURCE_LABEL: Record<string, string> = { PARTE: 'Parte', MANUAL: 'Manual', COMBUSTIBLE: 'Combustible', SERVICIO: 'Servicio' };
 
-interface MachinesModuleProps {
-  onNavigate?: (module: AppModule) => void;
+function draftFrom(m: FleetMachine | null): MachineDraft {
+  if (!m) {
+    return {
+      codigo: '',
+      descripcion: '',
+      meterUnit: 'HS',
+      status: 'ACTIVA',
+      esMaquina: true,
+      llevaMantenimiento: false,
+      monitoreoSatelital: false,
+      dinatran: false,
+      filters: [],
+      fluids: [],
+    };
+  }
+  return {
+    codigo: m.codigo,
+    descripcion: m.descripcion,
+    marca: m.marca,
+    modelo: m.modelo,
+    anio: m.anio,
+    chapa: m.chapa,
+    fechaIngreso: m.fechaIngreso,
+    worksiteId: m.worksite?.id ?? null,
+    categoryId: m.category?.id ?? null,
+    meterUnit: m.meterUnit,
+    status: m.status,
+    paradaDesde: m.paradaDesde,
+    esMaquina: m.esMaquina,
+    llevaMantenimiento: m.llevaMantenimiento,
+    monitoreoSatelital: m.monitoreoSatelital,
+    dinatran: m.dinatran.vence !== null,
+    dinatranVence: m.dinatran.vence,
+    habilitacionMunicipalVence: m.habilitacionMunicipal.vence,
+    observaciones: m.observaciones,
+    filters: m.filters,
+    fluids: m.fluids,
+  };
 }
 
-export const MachinesModule: React.FC<MachinesModuleProps> = () => {
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [readings, setReadings] = useState<TotalizerReading[]>([]);
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [showNew, setShowNew] = useState(false);
-  const [showReading, setShowReading] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+function ComplianceBadge({ label, vence, estado }: { label: string; vence: string | null; estado: ComplianceStatus }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <StatusPill tone={COMPLIANCE_TONE[estado]}>{vence ? `${COMPLIANCE_LABEL[estado]} · ${formatDate(vence)}` : 'Sin dato'}</StatusPill>
+    </div>
+  );
+}
 
-  const selected = machines.find((m) => m.codmaq === selectedCode) ?? null;
+export const MachinesModule: React.FC<{ onNavigate?: (module: AppModule) => void }> = () => {
+  const [filters, setFilters] = useState<MachineFilters>({});
+  const [machines, setMachines] = useState<FleetMachine[] | null>(null);
+  const [categories, setCategories] = useState<CategoryRef[]>([]);
+  const [worksites, setWorksites] = useState<Worksite[]>([]);
+  const [due, setDue] = useState<DueItem[]>([]);
+  const [selected, setSelected] = useState<FleetMachine | 'NUEVA' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const load = async () => {
-    const list = await ErpApi.getMachines();
-    setMachines(list);
-    setLoading(false);
-    setSelectedCode((code) => code ?? list[0]?.codmaq ?? null);
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  const reload = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
-    if (!selectedCode) return setReadings([]);
-    ErpApi.getTotalizers(selectedCode).then((list) => setReadings([...list].reverse()));
-    setConfirmDelete(false);
-  }, [selectedCode, machines]);
+    Promise.all([fleetApi.categories(), mastersApi.worksites(), fleetApi.dueItems(60)])
+      .then(([cats, obras, vencimientos]) => {
+        setCategories(cats);
+        setWorksites(obras);
+        setDue(vencimientos.items);
+      })
+      .catch((err) => setError(describeError(err)));
+  }, [reloadKey]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return machines;
-    return machines.filter((m) => `${m.codmaq} ${m.descripcion} ${m.marca}`.toLowerCase().includes(q));
-  }, [machines, search]);
+  useEffect(() => {
+    setError(null);
+    fleetApi
+      .list(filters)
+      .then(setMachines)
+      .catch((err) => setError(describeError(err)));
+  }, [filters, reloadKey]);
 
-  const service = selected
-    ? evaluateMaintenanceDue(selected.horasActuales || 0, selected.ultimoServicioHoras || 0, SERVICE_INTERVAL_HOURS)
-    : null;
+  const setFilter = <K extends keyof MachineFilters>(key: K, value: MachineFilters[K] | '') =>
+    setFilters((prev) => ({ ...prev, [key]: value === '' ? undefined : value }));
 
-  const saveStatus = async (estado: Machine['estado']) => {
-    if (!selected) return;
-    await ErpApi.saveMachine({ ...selected, estado });
-    await load();
+  const loadDefaults = async () => {
+    try {
+      await fleetApi.loadDefaultCategories();
+      reload();
+    } catch (err) {
+      setError(describeError(err));
+    }
   };
-
-  const deleteSelected = async () => {
-    if (!selected) return;
-    await ErpApi.deleteMachine(selected.codmaq);
-    setSelectedCode(null);
-    await load();
-  };
-
-  if (loading) return <p className="p-12 text-center text-sm text-slate-500">Cargando flota…</p>;
 
   return (
     <Page>
       <PageHeader
         title="Flota"
-        help={`${machines.length} equipos`}
-        actions={<Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setShowNew(true)}>Nueva máquina</Button>}
+        help="Buscá por código aunque escribas espacios (01 61 01). Las lecturas que bajan se rechazan salvo corrección con motivo."
+        actions={
+          <>
+            {categories.length === 0 && (
+              <Button variant="secondary" icon={<Tags className="h-4 w-4" />} onClick={loadDefaults}>
+                Cargar categorías
+              </Button>
+            )}
+            <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setSelected('NUEVA')}>
+              Nueva máquina
+            </Button>
+          </>
+        }
       />
 
-      {machines.length === 0 ? (
-        <EmptyState
-          icon={<Truck className="h-8 w-8" />}
-          title="Sin equipos cargados"
-          help="Dé de alta la primera máquina para empezar a registrar horómetros."
-          action={<Button variant="primary" onClick={() => setShowNew(true)}>Nueva máquina</Button>}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-          <Card padded={false} className="self-start">
-            <div className="border-b border-slate-100 p-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar código o descripción"
-                  className={cx(inputClass, 'pl-9')}
-                />
-              </div>
+      {due.length > 0 && (
+        <Card title="Vencimientos próximos o vencidos" padded={false}>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {due.map((d) => (
+              <li key={`${d.maquina.id}-${d.tipo}`} className="flex items-center justify-between px-5 py-2.5">
+                <span>
+                  <span className="font-mono font-semibold">{d.maquina.codigo}</span> · {d.maquina.descripcion} ·{' '}
+                  {d.tipo === 'DINATRAN' ? 'DINATRAN' : 'Habilitación municipal'}
+                </span>
+                <StatusPill tone={COMPLIANCE_TONE[d.estado]}>
+                  {COMPLIANCE_LABEL[d.estado]} · {formatDate(d.vence)}
+                </StatusPill>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card padded={false}>
+        <div className="flex flex-wrap items-end gap-3 border-b border-slate-100 p-4">
+          <Field label="Buscar">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                className={cx(inputClass, 'pl-8')}
+                placeholder="Código o descripción"
+                value={filters.q ?? ''}
+                onChange={(e) => setFilter('q', e.target.value)}
+              />
             </div>
-            <ul className="max-h-[70vh] divide-y divide-slate-100 overflow-y-auto">
-              {filtered.map((m) => (
-                <li key={m.codmaq}>
-                  <button
-                    onClick={() => setSelectedCode(m.codmaq)}
-                    className={cx(
-                      'flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition',
-                      m.codmaq === selectedCode ? 'bg-slate-100' : 'hover:bg-slate-50'
-                    )}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-slate-900">{m.codmaq}</span>
-                      <span className="block truncate text-xs text-slate-500">{m.descripcion}</span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-slate-500">{formatHours(m.horasActuales)}</span>
-                  </button>
-                </li>
+          </Field>
+          <Field label="Estado">
+            <select className={inputClass} value={filters.estado ?? ''} onChange={(e) => setFilter('estado', e.target.value as MachineStatus)}>
+              <option value="">Todos</option>
+              {(Object.keys(STATUS_LABEL) as MachineStatus[]).map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
               ))}
-            </ul>
-          </Card>
-
-          {selected && service && (
-            <div className="space-y-6">
-              <Card
-                title={
-                  <span className="flex items-center gap-2">
-                    {selected.codmaq} · {selected.descripcion}
-                    <StatusPill tone={STATUS_TONE[selected.estado]}>{STATUS_LABEL[selected.estado]}</StatusPill>
-                  </span>
-                }
-                action={
-                  confirmDelete ? (
-                    <span className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-600">¿Dar de baja el equipo?</span>
-                      <Button size="sm" variant="danger" onClick={deleteSelected}>Sí, eliminar</Button>
-                      <Button size="sm" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
-                    </span>
-                  ) : (
-                    <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => setConfirmDelete(true)}>
-                      Eliminar
-                    </Button>
-                  )
-                }
-              >
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-4">
-                  <Fact label="Horas actuales" value={formatHours(selected.horasActuales)} />
-                  <Fact label="Desde último servicio" value={formatHours(service.hoursSinceLastService)} />
-                  <Fact label="Marca / modelo" value={[selected.marca, selected.modelo].filter(Boolean).join(' ') || '—'} />
-                  <Fact label="Ubicación" value={selected.ubicacionActual || '—'} />
-                </dl>
-
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                  <p className={cx('text-sm', service.isOverdue ? 'font-semibold text-rose-700' : service.isWarning ? 'font-semibold text-amber-700' : 'text-slate-600')}>
-                    Servicio cada {SERVICE_INTERVAL_HOURS} hs · {service.statusText}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selected.estado}
-                      onChange={(e) => saveStatus(e.target.value as Machine['estado'])}
-                      className={cx(inputClass, 'w-auto py-1.5')}
-                      aria-label="Estado del equipo"
-                    >
-                      {(Object.keys(STATUS_LABEL) as Machine['estado'][]).map((estado) => (
-                        <option key={estado} value={estado}>{STATUS_LABEL[estado]}</option>
-                      ))}
-                    </select>
-                    <Button variant="primary" icon={<Gauge className="h-4 w-4" />} onClick={() => setShowReading(true)}>
-                      Registrar horómetro
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-
-              <Card title="Lecturas de horómetro" padded={false}>
-                {readings.length === 0 ? (
-                  <div className="p-5">
-                    <EmptyState title="Sin lecturas" help="Registre el horómetro para llevar las horas trabajadas." />
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500">
-                        <tr>
-                          <th className="px-5 py-2.5">Fecha</th>
-                          <th className="px-5 py-2.5 text-right">Horómetro</th>
-                          <th className="px-5 py-2.5 text-right">Horas trabajadas</th>
-                          <th className="px-5 py-2.5 text-right">Gasoil (L)</th>
-                          <th className="px-5 py-2.5">Chofer</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {readings.map((r) => (
-                          <tr key={r.id}>
-                            <td className="px-5 py-2.5 text-slate-700">{r.fecha}</td>
-                            <td className="px-5 py-2.5 text-right tabular-nums">{formatHours(r.horas)}</td>
-                            <td className="px-5 py-2.5 text-right tabular-nums text-slate-700">{formatHours(r.difK)}</td>
-                            <td className="px-5 py-2.5 text-right tabular-nums text-slate-700">{r.litrosGasoil ?? '—'}</td>
-                            <td className="px-5 py-2.5 text-slate-700">{r.chofer || '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Card>
-            </div>
-          )}
+            </select>
+          </Field>
+          <Field label="Categoría">
+            <select className={inputClass} value={filters.categoria ?? ''} onChange={(e) => setFilter('categoria', e.target.value)}>
+              <option value="">Todas</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Obra">
+            <select className={inputClass} value={filters.obra ?? ''} onChange={(e) => setFilter('obra', e.target.value)}>
+              <option value="">Todas</option>
+              {worksites.map((w) => (
+                <option key={w.id} value={w.id}>{w.nombre}</option>
+              ))}
+            </select>
+          </Field>
+          <div className="flex flex-wrap gap-4 pb-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={filters.mantenimiento === true} onChange={(e) => setFilter('mantenimiento', e.target.checked ? true : undefined)} />
+              Lleva mantenimiento
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={filters.incluirNoMaquinas === true} onChange={(e) => setFilter('incluirNoMaquinas', e.target.checked ? true : undefined)} />
+              Incluir no máquinas
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={filters.incluirBaja === true} onChange={(e) => setFilter('incluirBaja', e.target.checked ? true : undefined)} />
+              Incluir de baja
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={filters.observadas === true} onChange={(e) => setFilter('observadas', e.target.checked ? true : undefined)} />
+              Solo observadas (importadas con datos dudosos)
+            </label>
+          </div>
         </div>
-      )}
 
-      {showNew && (
-        <NewMachineModal
-          onClose={() => setShowNew(false)}
-          onSaved={async (codmaq) => {
-            setShowNew(false);
-            await load();
-            setSelectedCode(codmaq);
-          }}
-          existingCodes={machines.map((m) => m.codmaq.toLowerCase())}
-        />
-      )}
+        {error && <div className="px-4 py-3 text-sm text-rose-700">{error}</div>}
 
-      {showReading && selected && (
-        <ReadingModal
-          machine={selected}
-          onClose={() => setShowReading(false)}
-          onSaved={async () => {
-            setShowReading(false);
-            await load();
+        {machines === null ? (
+          <div className="p-6 text-sm text-slate-500">Cargando flota…</div>
+        ) : machines.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={<Truck className="h-6 w-6" />}
+              title="No hay máquinas con estos filtros"
+              help="Cargá la primera máquina o cambiá los filtros."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Código</th>
+                  <th className="px-4 py-2.5">Descripción</th>
+                  <th className="px-4 py-2.5">Categoría</th>
+                  <th className="px-4 py-2.5">Obra</th>
+                  <th className="px-4 py-2.5">Estado</th>
+                  <th className="px-4 py-2.5 text-right">Lectura</th>
+                  <th className="px-4 py-2.5">Vencimientos</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {machines.map((m) => (
+                  <tr key={m.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelected(m)}>
+                    <td className="px-4 py-2.5 font-mono font-semibold text-slate-900">
+                      {m.codigo}
+                      {m.observado && <span className="ml-2 rounded-md bg-amber-50 px-1.5 py-0.5 font-sans text-xs font-medium text-amber-800" title="Importada con datos dudosos: revisala">observada</span>}
+                    </td>
+                    <td className="px-4 py-2.5">{m.descripcion}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{m.category?.nombre ?? <span className="text-slate-400">—</span>}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{m.worksite?.nombre ?? <span className="text-slate-400">—</span>}</td>
+                    <td className="px-4 py-2.5"><StatusPill tone={STATUS_TONE[m.status]}>{STATUS_LABEL[m.status]}</StatusPill></td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {m.lecturaActual ? `${formatQty(m.lecturaActual.valor)} ${m.meterUnit.toLowerCase()}` : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-col gap-1">
+                        {m.dinatran.vence && <ComplianceBadge label="DINATRAN" vence={m.dinatran.vence} estado={m.dinatran.estado} />}
+                        {m.habilitacionMunicipal.vence && (
+                          <ComplianceBadge label="Hab. municipal" vence={m.habilitacionMunicipal.vence} estado={m.habilitacionMunicipal.estado} />
+                        )}
+                        {!m.dinatran.vence && !m.habilitacionMunicipal.vence && <span className="text-slate-400">—</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {selected && (
+        <MachineDetail
+          machine={selected === 'NUEVA' ? null : selected}
+          categories={categories}
+          worksites={worksites}
+          onClose={() => setSelected(null)}
+          onSaved={() => {
+            setSelected(null);
+            reload();
           }}
         />
       )}
@@ -268,137 +304,363 @@ export const MachinesModule: React.FC<MachinesModuleProps> = () => {
   );
 };
 
-function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+/* ─── Ficha de máquina ─────────────────────────────────────────────────── */
+
+const MachineDetail: React.FC<{
+  machine: FleetMachine | null;
+  categories: CategoryRef[];
+  worksites: Worksite[];
+  onClose: () => void;
+  onSaved: () => void;
+}> = ({ machine, categories, worksites, onClose, onSaved }) => {
+  const [tab, setTab] = useState<'DATOS' | 'FILTROS' | 'LECTURAS'>('DATOS');
+  const [draft, setDraft] = useState<MachineDraft>(() => draftFrom(machine));
+  const [current, setCurrent] = useState<FleetMachine | null>(machine);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  const patch = (changes: Partial<MachineDraft>) => setDraft((prev) => ({ ...prev, ...changes }));
+
+  // La ficha imprimible se monta solo mientras se imprime (ver index.css, body.print-doc).
+  useEffect(() => {
+    if (!printing) return;
+    const restore = printArea();
+    setPrinting(false);
+    return restore;
+  }, [printing]);
+
+  const save = async () => {
+    if (!draft.codigo.trim() || !draft.descripcion.trim()) {
+      setErrors(['El código y la descripción son obligatorios.']);
+      return;
+    }
+    setSaving(true);
+    setErrors([]);
+    try {
+      const saved = current ? await fleetApi.update(current.id, draft) : await fleetApi.create(draft);
+      setCurrent(saved);
+      onSaved();
+    } catch (err) {
+      setErrors([describeError(err)]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const title = current ? `${current.codigo} · ${current.descripcion}` : 'Nueva máquina';
+
   return (
-    <div>
-      <dt className="text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="mt-1 font-medium tabular-nums text-slate-900">{value}</dd>
+    <>
+      <Modal
+        title={title}
+        size="lg"
+        onClose={onClose}
+        footer={
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-2">
+              {current && (
+                <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => setPrinting(true)}>
+                  Imprimir ficha
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+              <Button variant="primary" onClick={save} disabled={saving}>
+                {saving ? 'Guardando…' : 'Guardar ficha'}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-5">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-sm">
+            {(['DATOS', 'FILTROS', 'LECTURAS'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cx(
+                  'rounded-lg px-3 py-1.5 font-medium transition',
+                  tab === t ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                {t === 'DATOS' ? 'Datos' : t === 'FILTROS' ? 'Filtros y fluidos' : 'Lecturas'}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'DATOS' && <DatosTab draft={draft} patch={patch} categories={categories} worksites={worksites} />}
+          {tab === 'FILTROS' && <FiltrosTab draft={draft} patch={patch} />}
+          {tab === 'LECTURAS' && current && <LecturasTab machine={current} onRegistered={(updated) => setCurrent(updated)} />}
+          {tab === 'LECTURAS' && !current && (
+            <p className="text-sm text-slate-500">Guardá la máquina primero para registrar lecturas.</p>
+          )}
+
+          {errors.length > 0 && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {errors.map((e) => (
+                <div key={e}>{e}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+      {printing && current && <PrintableFicha machine={current} />}
+    </>
+  );
+};
+
+function DatosTab({
+  draft,
+  patch,
+  categories,
+  worksites,
+}: {
+  draft: MachineDraft;
+  patch: (changes: Partial<MachineDraft>) => void;
+  categories: CategoryRef[];
+  worksites: Worksite[];
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Código">
+        <input className={inputClass} value={draft.codigo} onChange={(e) => patch({ codigo: e.target.value })} />
+      </Field>
+      <Field label="Descripción">
+        <input className={inputClass} value={draft.descripcion} onChange={(e) => patch({ descripcion: e.target.value })} />
+      </Field>
+      <Field label="Marca">
+        <input className={inputClass} value={draft.marca ?? ''} onChange={(e) => patch({ marca: e.target.value || null })} />
+      </Field>
+      <Field label="Modelo">
+        <input className={inputClass} value={draft.modelo ?? ''} onChange={(e) => patch({ modelo: e.target.value || null })} />
+      </Field>
+      <Field label="Chapa">
+        <input className={inputClass} value={draft.chapa ?? ''} onChange={(e) => patch({ chapa: e.target.value || null })} />
+      </Field>
+      <Field label="Nº de serie">
+        <input className={inputClass} value={draft.numeroSerie ?? ''} onChange={(e) => patch({ numeroSerie: e.target.value || null })} />
+      </Field>
+      <Field label="Categoría">
+        <select className={inputClass} value={draft.categoryId ?? ''} onChange={(e) => patch({ categoryId: e.target.value || null })}>
+          <option value="">Sin categoría</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Obra">
+        <select className={inputClass} value={draft.worksiteId ?? ''} onChange={(e) => patch({ worksiteId: e.target.value || null })}>
+          <option value="">Sin obra</option>
+          {worksites.map((w) => (
+            <option key={w.id} value={w.id}>{w.nombre}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Unidad del medidor" hint="Horas (HS) o kilómetros (KM)">
+        <select className={inputClass} value={draft.meterUnit} onChange={(e) => patch({ meterUnit: e.target.value as MeterUnit })}>
+          <option value="HS">Horas</option>
+          <option value="KM">Kilómetros</option>
+        </select>
+      </Field>
+      <Field label="Estado">
+        <select className={inputClass} value={draft.status} onChange={(e) => patch({ status: e.target.value as MachineStatus })}>
+          {(Object.keys(STATUS_LABEL) as MachineStatus[]).map((s) => (
+            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="DINATRAN vence">
+        <input type="date" className={inputClass} value={draft.dinatranVence ?? ''} onChange={(e) => patch({ dinatranVence: e.target.value || null, dinatran: !!e.target.value })} />
+      </Field>
+      <Field label="Habilitación municipal vence">
+        <input type="date" className={inputClass} value={draft.habilitacionMunicipalVence ?? ''} onChange={(e) => patch({ habilitacionMunicipalVence: e.target.value || null })} />
+      </Field>
+      <div className="flex flex-wrap gap-4 text-sm text-slate-700 sm:col-span-2">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.esMaquina} onChange={(e) => patch({ esMaquina: e.target.checked })} />Es máquina</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.llevaMantenimiento} onChange={(e) => patch({ llevaMantenimiento: e.target.checked })} />Lleva mantenimiento</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.monitoreoSatelital} onChange={(e) => patch({ monitoreoSatelital: e.target.checked })} />Monitoreo satelital</label>
+      </div>
+      <div className="sm:col-span-2">
+        <Field label="Observaciones">
+          <textarea className={cx(inputClass, 'min-h-16')} value={draft.observaciones ?? ''} onChange={(e) => patch({ observaciones: e.target.value || null })} />
+        </Field>
+      </div>
     </div>
   );
 }
 
-function NewMachineModal({
-  onClose,
-  onSaved,
-  existingCodes,
-}: {
-  onClose: () => void;
-  onSaved: (codmaq: string) => void;
-  existingCodes: string[];
-}) {
-  const [form, setForm] = useState<Machine>(emptyMachine());
-  const [error, setError] = useState<string | null>(null);
-  const set = <K extends keyof Machine>(key: K, value: Machine[K]) => setForm((f) => ({ ...f, [key]: value }));
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = form.codmaq.trim().toUpperCase();
-    if (!code || !form.descripcion.trim()) return setError('Código y descripción son obligatorios.');
-    if (existingCodes.includes(code.toLowerCase())) return setError(`Ya existe un equipo con el código ${code}.`);
-    const id = `mac-${Date.now()}`;
-    await ErpApi.saveMachine({ ...form, id, codmaq: code, descripcion: form.descripcion.trim() });
-    onSaved(code);
-  };
-
+function FiltrosTab({ draft, patch }: { draft: MachineDraft; patch: (changes: Partial<MachineDraft>) => void }) {
+  const setFilter = (i: number, changes: Partial<MachineDraft['filters'][number]>) =>
+    patch({ filters: draft.filters.map((f, idx) => (idx === i ? { ...f, ...changes } : f)) });
+  const setFluid = (i: number, changes: Partial<MachineDraft['fluids'][number]>) =>
+    patch({ fluids: draft.fluids.map((f, idx) => (idx === i ? { ...f, ...changes } : f)) });
   return (
-    <Modal
-      title="Nueva máquina"
-      onClose={onClose}
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" type="submit" form="new-machine-form">Guardar</Button>
-        </>
-      }
-    >
-      <form id="new-machine-form" onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Código *">
-            <input className={inputClass} value={form.codmaq} onChange={(e) => set('codmaq', e.target.value)} placeholder="CAT-416" />
-          </Field>
-          <Field label="Horas iniciales">
-            <input className={inputClass} type="number" min={0} value={form.horasActuales} onChange={(e) => set('horasActuales', Number(e.target.value))} />
-          </Field>
+    <div className="space-y-6">
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Filtros</h3>
+          <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => patch({ filters: [...draft.filters, { tipo: '', referencia: null, cantidad: 1 }] })}>
+            Agregar filtro
+          </Button>
         </div>
-        <Field label="Descripción *">
-          <input className={inputClass} value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} placeholder="Retroexcavadora Caterpillar 416E" />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Marca">
-            <input className={inputClass} value={form.marca} onChange={(e) => set('marca', e.target.value)} />
-          </Field>
-          <Field label="Modelo">
-            <input className={inputClass} value={form.modelo} onChange={(e) => set('modelo', e.target.value)} />
-          </Field>
+        {draft.filters.length === 0 && <p className="text-sm text-slate-500">Sin filtros cargados.</p>}
+        {draft.filters.map((f, i) => (
+          <div key={i} className="mb-2 grid grid-cols-[1fr_1fr_6rem_auto] gap-2">
+            <input className={inputClass} placeholder="Tipo (aceite motor, aire…)" value={f.tipo} onChange={(e) => setFilter(i, { tipo: e.target.value })} />
+            <input className={inputClass} placeholder="Referencia" value={f.referencia ?? ''} onChange={(e) => setFilter(i, { referencia: e.target.value || null })} />
+            <input type="number" min="0" className={inputClass} value={f.cantidad ?? ''} onChange={(e) => setFilter(i, { cantidad: e.target.value === '' ? null : Number(e.target.value) })} />
+            <Button size="sm" variant="ghost" onClick={() => patch({ filters: draft.filters.filter((_, idx) => idx !== i) })}>Quitar</Button>
+          </div>
+        ))}
+      </div>
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Fluidos</h3>
+          <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => patch({ fluids: [...draft.fluids, { punto: '', producto: null, capacidadLitros: null }] })}>
+            Agregar fluido
+          </Button>
         </div>
-        <Field label="Ubicación">
-          <input className={inputClass} value={form.ubicacionActual} onChange={(e) => set('ubicacionActual', e.target.value)} />
-        </Field>
-        {error && <p className="text-sm text-rose-700">{error}</p>}
-      </form>
-    </Modal>
+        {draft.fluids.length === 0 && <p className="text-sm text-slate-500">Sin fluidos cargados.</p>}
+        {draft.fluids.map((f, i) => (
+          <div key={i} className="mb-2 grid grid-cols-[1fr_1fr_7rem_auto] gap-2">
+            <input className={inputClass} placeholder="Punto (cárter, hidráulico…)" value={f.punto} onChange={(e) => setFluid(i, { punto: e.target.value })} />
+            <input className={inputClass} placeholder="Producto" value={f.producto ?? ''} onChange={(e) => setFluid(i, { producto: e.target.value || null })} />
+            <input type="number" min="0" className={inputClass} placeholder="Litros" value={f.capacidadLitros ?? ''} onChange={(e) => setFluid(i, { capacidadLitros: e.target.value === '' ? null : Number(e.target.value) })} />
+            <Button size="sm" variant="ghost" onClick={() => patch({ fluids: draft.fluids.filter((_, idx) => idx !== i) })}>Quitar</Button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function ReadingModal({
-  machine,
-  onClose,
-  onSaved,
-}: {
-  machine: Machine;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [fecha, setFecha] = useState(today());
-  const [horas, setHoras] = useState<number>(machine.horasActuales);
-  const [gasoil, setGasoil] = useState<string>('');
-  const [chofer, setChofer] = useState('');
-  const [error, setError] = useState<string | null>(null);
+function LecturasTab({ machine, onRegistered }: { machine: FleetMachine; onRegistered: (m: FleetMachine) => void }) {
+  const [readings, setReadings] = useState<Reading[] | null>(null);
+  const [fecha, setFecha] = useState(todayIso());
+  const [valor, setValor] = useState('');
+  const [correccion, setCorreccion] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!Number.isFinite(horas) || horas < machine.horasActuales) {
-      return setError(`El horómetro no puede ser menor a ${formatHours(machine.horasActuales)}.`);
+  const load = () =>
+    fleetApi
+      .readings(machine.id)
+      .then(setReadings)
+      .catch((err) => setErrors([describeError(err)]));
+
+  useEffect(() => {
+    load();
+  }, [machine.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submit = async () => {
+    setMessage(null);
+    const value = Number(valor);
+    if (valor.trim() === '' || !Number.isFinite(value)) {
+      setErrors(['Ingresá el valor del medidor.']);
+      return;
     }
-    await ErpApi.addTotalizerReading({
-      codmaq: machine.codmaq,
-      fecha,
-      horas,
-      litrosGasoil: gasoil ? Number(gasoil) : undefined,
-      chofer: chofer.trim() || undefined,
-    });
-    onSaved();
+    try {
+      const saved = await fleetApi.addReading(machine.id, { fecha, valor: value, correccion, motivo: motivo || null });
+      setErrors([]);
+      setMessage(`Lectura guardada. Desde la anterior: ${formatQty(saved.diferencial ?? 0)} ${machine.meterUnit.toLowerCase()}.`);
+      setValor('');
+      setMotivo('');
+      setCorreccion(false);
+      await load();
+      onRegistered({ ...machine, lecturaActual: { valor: value, fecha } });
+    } catch (err) {
+      setErrors([describeError(err)]);
+    }
   };
 
+  const unidad = machine.meterUnit.toLowerCase();
   return (
-    <Modal
-      title={`Horómetro · ${machine.codmaq}`}
-      onClose={onClose}
-      footer={
-        <>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" type="submit" form="reading-form">Guardar lectura</Button>
-        </>
-      }
-    >
-      <form id="reading-form" onSubmit={submit} className="space-y-4">
-        <p className="text-xs text-slate-500">Última lectura: {formatHours(machine.horasActuales)}</p>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Fecha">
-            <input className={inputClass} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-          </Field>
-          <Field label="Horómetro (hs) *">
-            <input className={inputClass} type="number" step="0.1" value={horas} onChange={(e) => setHoras(Number(e.target.value))} />
-          </Field>
-          <Field label="Gasoil (litros)">
-            <input className={inputClass} type="number" min={0} value={gasoil} onChange={(e) => setGasoil(e.target.value)} />
-          </Field>
-          <Field label="Chofer">
-            <input className={inputClass} value={chofer} onChange={(e) => setChofer(e.target.value)} />
-          </Field>
+    <div className="space-y-5">
+      <div className="grid gap-4 rounded-xl border border-slate-200 p-4 sm:grid-cols-4">
+        <Field label="Fecha">
+          <input type="date" className={inputClass} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        </Field>
+        <Field label={`Valor (${unidad})`}>
+          <input type="number" step="any" min="0" className={inputClass} value={valor} onChange={(e) => setValor(e.target.value)} />
+        </Field>
+        <Field label="Motivo de corrección" hint="Solo si la lectura baja">
+          <input className={inputClass} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </Field>
+        <div className="flex flex-col justify-end gap-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={correccion} onChange={(e) => setCorreccion(e.target.checked)} />
+            Es una corrección
+          </label>
+          <Button variant="primary" icon={<Gauge className="h-4 w-4" />} onClick={submit}>Registrar lectura</Button>
         </div>
-        {error && <p className="text-sm text-rose-700">{error}</p>}
-      </form>
-    </Modal>
+      </div>
+
+      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>}
+      {errors.length > 0 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errors.map((e) => (
+            <div key={e}>{e}</div>
+          ))}
+          {!correccion && <div className="mt-1">Si es una corrección real, marcala y poné el motivo.</div>}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Fecha</th>
+              <th className="px-3 py-2 text-right">Valor</th>
+              <th className="px-3 py-2">Origen</th>
+              <th className="px-3 py-2">Observación</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {readings === null && <tr><td className="px-3 py-3 text-slate-500" colSpan={4}>Cargando…</td></tr>}
+            {readings?.length === 0 && <tr><td className="px-3 py-3 text-slate-500" colSpan={4}>Sin lecturas todavía.</td></tr>}
+            {readings?.map((r) => (
+              <tr key={r.id}>
+                <td className="px-3 py-2">{formatDate(r.fecha)}</td>
+                <td className="px-3 py-2 text-right font-mono">{formatQty(r.valor)} {unidad}</td>
+                <td className="px-3 py-2 text-slate-600">{SOURCE_LABEL[r.fuente] ?? r.fuente}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  {r.correccion ? `Corrección: ${r.motivo ?? ''}` : r.parteId ? 'Desde parte diario' : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PrintableFicha({ machine }: { machine: FleetMachine }) {
+  return (
+    <div className="print-area text-sm text-black">
+      <div className="mb-4 border-b border-black pb-2">
+        <div className="text-lg font-bold">Ficha de máquina · {machine.codigo}</div>
+        <div>{machine.descripcion}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        <div>Marca / modelo: {[machine.marca, machine.modelo].filter(Boolean).join(' ') || '—'}</div>
+        <div>Chapa: {machine.chapa ?? '—'}</div>
+        <div>Categoría: {machine.category?.nombre ?? '—'}</div>
+        <div>Obra: {machine.worksite?.nombre ?? '—'}</div>
+        <div>Estado: {STATUS_LABEL[machine.status]}</div>
+        <div>Medidor: {machine.meterUnit === 'HS' ? 'Horas' : 'Kilómetros'}</div>
+        <div>Última lectura: {machine.lecturaActual ? `${formatQty(machine.lecturaActual.valor)} (${formatDate(machine.lecturaActual.fecha)})` : '—'}</div>
+        <div>DINATRAN: {machine.dinatran.vence ? formatDate(machine.dinatran.vence) : '—'}</div>
+        <div>Hab. municipal: {machine.habilitacionMunicipal.vence ? formatDate(machine.habilitacionMunicipal.vence) : '—'}</div>
+      </div>
+      <div className="mt-4 font-bold">Filtros</div>
+      <ul>{machine.filters.map((f, i) => <li key={i}>{f.tipo} {f.referencia ?? ''} × {f.cantidad ?? '—'}</li>)}</ul>
+      <div className="mt-4 font-bold">Fluidos</div>
+      <ul>{machine.fluids.map((f, i) => <li key={i}>{f.punto}: {f.producto ?? '—'} {f.capacidadLitros ? `(${f.capacidadLitros} l)` : ''}</li>)}</ul>
+    </div>
   );
 }

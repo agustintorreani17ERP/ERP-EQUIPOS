@@ -12,6 +12,17 @@ import type { ServerEnv } from './config/env';
 import { type Db, withTenant } from './db/connection';
 import { companies } from './db/schema';
 import { moduleManifest } from './module/manifest';
+import { ordersRouter } from './routes/orders';
+import { mastersRouter } from './routes/masters';
+import { fleetRouter } from './routes/fleet';
+import { eventsRouter } from './routes/events';
+import { financeRouter } from './routes/finance';
+import { fuelRouter } from './routes/fuel';
+import { maintenanceRouter } from './routes/maintenance';
+import { stockRouter } from './routes/stock';
+import { dispatchRouter } from './routes/dispatch';
+import { importsRouter } from './routes/imports';
+import { erpRouter } from './routes/erp';
 
 export interface AppDeps {
   env: ServerEnv;
@@ -56,6 +67,18 @@ export function createApp({ env, db }: AppDeps) {
       next(err);
     }
   });
+
+  app.use(ordersRouter({ db, requireAuth }));
+  app.use(mastersRouter({ db, requireAuth }));
+  app.use(fleetRouter({ db, requireAuth }));
+  app.use(eventsRouter({ db, requireAuth }));
+  app.use(financeRouter({ db, requireAuth }));
+  app.use(fuelRouter({ db, requireAuth }));
+  app.use(maintenanceRouter({ db, requireAuth }));
+  app.use(stockRouter({ db, requireAuth }));
+  app.use(dispatchRouter({ db, requireAuth }));
+  app.use(importsRouter({ db, requireAuth }));
+  app.use(erpRouter({ db, requireAuth, env }));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);

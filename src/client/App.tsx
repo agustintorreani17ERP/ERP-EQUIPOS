@@ -6,11 +6,14 @@
 import React, { useState } from 'react';
 import { DailyReportsModule } from './components/DailyReports/DailyReportsModule';
 import { DashboardOverview } from './components/Dashboard/DashboardOverview';
+import { DispatchModule } from './components/Dispatch/DispatchModule';
+import { ImportModule } from './components/Import/ImportModule';
 import { FinanceModule } from './components/Finance/FinanceModule';
+import { FuelModule } from './components/Fuel/FuelModule';
 import { MachinesModule } from './components/Machines/MachinesModule';
+import { MaintenanceModule } from './components/Maintenance/MaintenanceModule';
 import { OrdersModule } from './components/Orders/OrdersModule';
 import { AppModule, Sidebar } from './components/Navigation/Sidebar';
-import { MaintenanceServicesModule } from './components/Services/MaintenanceServicesModule';
 import { StockModule } from './components/Stock/StockModule';
 import { SuppliersModule } from './components/Suppliers/SuppliersModule';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from './ui/sidebar';
@@ -20,10 +23,13 @@ const TITLES: Record<AppModule, string> = {
   MACHINES: 'Flota',
   DAILY_REPORTS: 'Partes diarios',
   SERVICES: 'Mantenimiento',
+  FUEL: 'Combustibles y lubricantes',
   ORDERS: 'Pedidos',
   STOCK: 'Stock',
+  DISPATCH: 'Notas de envío',
   FINANCE: 'Fondos',
   SUPPLIERS: 'Proveedores',
+  IMPORT: 'Importar planillas',
 };
 
 export default function App() {
@@ -44,11 +50,14 @@ export default function App() {
             {currentModule === 'DASHBOARD' && <DashboardOverview onNavigate={setCurrentModule} />}
             {currentModule === 'MACHINES' && <MachinesModule onNavigate={setCurrentModule} />}
             {currentModule === 'DAILY_REPORTS' && <DailyReportsModule />}
-            {currentModule === 'SERVICES' && <MaintenanceServicesModule />}
+            {currentModule === 'SERVICES' && <MaintenanceModule />}
+            {currentModule === 'FUEL' && <FuelModule />}
             {currentModule === 'ORDERS' && <OrdersModule />}
             {currentModule === 'STOCK' && <StockModule />}
+            {currentModule === 'DISPATCH' && <DispatchModule />}
             {currentModule === 'FINANCE' && <FinanceModule />}
             {currentModule === 'SUPPLIERS' && <SuppliersModule />}
+            {currentModule === 'IMPORT' && <ImportModule />}
           </div>
         </main>
       </SidebarInset>

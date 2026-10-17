@@ -9,6 +9,7 @@ import path from 'node:path';
 import 'dotenv/config';
 import { createApp } from './app';
 import { loadEnv, type ServerEnv } from './config/env';
+import { iniciarConexionErp } from './bridge/sync';
 import {
   DEV_COMPANY_ID,
   createDb,
@@ -41,6 +42,7 @@ async function main() {
   const handle = await openDatabase(env);
 
   const app = createApp({ env, db: handle.db });
+  const detenerErp = iniciarConexionErp(handle.db, env.erp);
   app.listen(env.port, '127.0.0.1', () => {
     console.log(`Taller API escuchando en http://127.0.0.1:${env.port}`);
     if (env.authBypass) {

@@ -11,7 +11,7 @@ import { sql } from 'drizzle-orm';
 import { PGlite } from '@electric-sql/pglite';
 import { createApp } from '../app';
 import { loadEnv, type ServerEnv } from '../config/env';
-import { type Db, createTestDb, migrate, withTenant } from '../db/connection';
+import { APP_ROLE_GRANTS, type Db, createTestDb, migrate, withTenant } from '../db/connection';
 import { companies } from '../db/schema';
 
 const COMPANY_A = '11111111-1111-4111-8111-111111111111';
@@ -39,9 +39,7 @@ beforeAll(async () => {
       ('${COMPANY_A}', 'org_a', 'Empresa A'),
       ('${COMPANY_B}', 'org_b', 'Empresa B');
     create role taller_app login;
-    grant usage on schema public to taller_app;
-    grant select on companies to taller_app;
-    grant execute on function company_id_for_clerk_org(text) to taller_app;
+    ${APP_ROLE_GRANTS}
   `);
   // A partir de aquí todas las consultas corren como rol sujeto a RLS.
   await client.exec('set role taller_app');

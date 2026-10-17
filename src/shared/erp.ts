@@ -49,91 +49,6 @@ export interface Machine {
   };
 }
 
-// Despacho y Consumo de Gasoil y Aceites por Obra (Despachos y Recepciones de Gasoil y Aceites)
-export interface FuelOilDispatch {
-  id: string;
-  fecha: string;
-  codmaq: string;
-  obra: string;
-  horas: number;
-  difK: number;
-  kms?: number;
-  difKm?: number;
-  nroRemito: string;
-  gasoilLitros: number;
-  aceite15W40?: number;
-  aceite80W90?: number;
-  aceite10?: number;
-  aceiteTO4?: number;
-  aceiteATF?: number;
-  aceiteHidraulico68?: number;
-  grasaKg?: number;
-  despachadoPor: string;
-  chofer: string;
-  descripcion: string;
-  consumoPorHora?: number;
-  consumoPorKm?: number;
-  proveedor?: string;
-}
-
-// Entrada de Materiales & Insumos de Taller (Formulario ENTRADA DE MATERIALES)
-export interface MaterialEntry {
-  id: string;
-  fecha: string;
-  nroRemision: string;
-  proveedor: string;
-  obraDestino: string;
-  codmaq?: string;
-  despachadoPor: string;
-  chofer?: string;
-  chapa?: string;
-  observaciones?: string;
-  // Cantidades recibidas
-  gasoilLitros?: number;
-  aceite15W40?: number;
-  aceite80W90?: number;
-  aceiteSAE10?: number;
-  aceiteSAE30?: number;
-  aceiteSAE50?: number;
-  aceiteTO4?: number;
-  aceiteATF?: number;
-  aceiteHidraulico68?: number;
-  grasaKg?: number;
-  cementoBolsas?: number;
-  calBolsas?: number;
-  varillasHierro?: number;
-  otrosDetalles?: string;
-}
-
-// Orden de Servicio y Mantenimiento con Horas Ideales vs Reales (Formulario ORDEN DE SERVICIO)
-export interface MaintenanceOrder {
-  id: number;
-  nroOrden: string; // ej: "4996"
-  codmaq: string;
-  tipoServicio: '250_HS' | '500_HS' | '1000_HS' | '2000_HS' | '5000_KMS' | 'EXTRAORDINARIO';
-  fechaEmision: string;
-  fechaEfectuado?: string;
-  obraRealizado: string; // ej: "CAMPICHUELO", "CANTERA AGUAPETY", "TALLER CENTRAL"
-  horasIdeal: number;
-  horasActual: number;
-  horasReal: number;
-  horasFaltando: number;
-  horasDiferencia: number; // Real - Ideal
-  proximoMantenimientoHoras: number;
-  proximoTipoMantenimiento: string;
-  tecnicoResponsable: string;
-  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'APROBADO';
-  costoEstimado: number;
-  checklist: MaintenanceCheckItem[];
-  repuestosUtilizados: {
-    articuloCodigo: string;
-    descripcion: string;
-    cantidad: number;
-    unidad?: string;
-  }[];
-  observaciones: string;
-}
-
 // Lectura de Horómetro / Totalizador (Form_A)
 export interface TotalizerReading {
   id: string;
@@ -147,77 +62,91 @@ export interface TotalizerReading {
   observaciones?: string;
 }
 
-// Servicio / Mantenimiento Preventivo 1000 HS & 2000 HS
-// (Form_CAT 416 2000HS, Form_FREZADORA 1000 HS, Form_FREZADORA 2000 HS, Form_MOTONIV CAT 140G-H2000 HS, Form_TOPADORAS CAT 2000 HS)
-export interface MaintenanceCheckItem {
+// Pedidos de materiales (tablas PEDIDOS DE MATERIALES y PEDIDO DE MATERIALES REPUESTOS).
+// Recepción por renglón y parcial: el pendiente es pedido − Σ recibido (ver shared/orders.ts).
+export type { LineStatus, OrderStatus } from './orders';
+import type { LineStatus, OrderStatus } from './orders';
+
+export type OrderRubro = 'FILTROS' | 'ACEITES' | 'BATERIAS' | 'CUBIERTAS' | 'OTROS';
+
+export interface OrderLine {
   id: string;
+  position: number;
+  nroParte: string | null;
   descripcion: string;
-  categoria: 'MOTOR' | 'HIDRAULICO' | 'TRANSMISION' | 'FRENOS' | 'ESTRUCTURA';
-  completado: boolean;
-  observacion?: string;
+  cantidad: number;
+  machineId: string | null;
+  maquinaCodigo: string | null;
+  recibida: number;
+  pendiente: number;
+  estado: LineStatus;
 }
 
-export interface EquipmentServiceRecord {
-  id: number; // [Id] numérico del combo de búsqueda
-  codmaq: string; // [CODMAQ]
-  tipoServicio: '1000_HS' | '2000_HS' | 'EXTRAORDINARIO';
+export interface OrderReception {
+  id: string;
+  numero: number;
   fecha: string;
-  horasServicio: number;
-  tecnicoResponsable: string;
-  costoEstimado: number;
-  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'APROBADO';
-  allowEdit: boolean; // Controlado por allowedit() / Opción123_GotFocus
-  checklist: MaintenanceCheckItem[];
-  repuestosUtilizados: {
-    articuloCodigo: string;
-    descripcion: string;
-    cantidad: number;
-  }[];
-  observaciones: string;
-}
-
-// Pedidos de Materiales (Form_AGREGAR PEDIDO, Form_EDITAR PEDIDO)
-export type OrderStatus = 'PENDIENTE' | 'PARCIAL' | 'RECIBIDO' | 'CANCELADO';
-
-export interface OrderItem {
-  id: string;
-  pedidoCodigo: string; // [PEDIDO]
-  articuloCodigo: string; // [ARTICULO]
-  descripcion: string;
-  cantidadPedida: number;
-  cantidadRecibida: number;
-  unidad: 'U' | 'L' | 'KG' | 'M' | 'JUEGO';
-  precioUnitario: number;
-  totalCalculado: number; // Calculado en Form_EDITAR ART CON CALCULO
+  supplierId: string | null;
+  facturaORemision: string | null;
+  lines: { orderLineId: string; cantidad: number }[];
+  /** Vale de entrada a stock generado al recepcionar, si lo hubo. */
+  stockMovement?: { id: string; numero: number } | null;
 }
 
 export interface MaterialOrder {
   id: string;
-  pedido: string; // [PEDIDO] ej. "PED-2024-001"
+  numero: number;
   fecha: string;
-  solicitante: string;
-  departamento: string;
-  codmaqDestino?: string; // Máquina a la que va asignado el repuesto
-  prioridad: 'BAJA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+  anulado: boolean;
+  compraCentral: boolean;
+  pedidoDeObra: boolean;
+  rubros: OrderRubro[];
+  observaciones: string | null;
+  worksite: { id: string; codigo: string; nombre: string } | null;
+  machine: { id: string; codigo: string; descripcion: string } | null;
+  supplier: { id: string; nombre: string } | null;
   estado: OrderStatus;
-  observaciones?: string;
-  items: OrderItem[];
-  subtotal: number;
-  impuestos: number;
-  total: number;
+  lines: OrderLine[];
+  receptions: OrderReception[];
 }
 
-// Catálogo de Artículos / Repuestos (Form_EDITAR ARTICULO, Form_EDITAR ART CON CALCULO)
-export interface Article {
-  id?: string;
-  codigo: string; // [ARTICULO]
+export interface PendingReportRow {
+  pedidoId: string;
+  pedidoNumero: number;
+  fecha: string;
+  dias: number;
+  obra: string;
+  maquina: string;
+  rubro: string;
+  proveedor: string | null;
+  nroParte: string | null;
   descripcion: string;
-  categoria: 'REPUESTOS' | 'LUBRICANTES' | 'HERRAMIENTAS' | 'CONSUMIBLES' | 'SEGURIDAD' | 'FILTROS' | 'CORREAS' | 'DESGASTE' | 'ELECTRICIDAD' | 'FERRETERIA' | 'MANGUERAS' | 'RODAMIENTOS' | 'OTROS' | string;
-  stockActual: number;
-  stockMinimo: number;
-  unidad: 'U' | 'L' | 'KG' | 'M' | 'JUEGO';
-  precioReferencia: number;
-  ubicacionDeposito: string;
+  cantidad: number;
+  recibida: number;
+  pendiente: number;
+}
+
+export interface PendingReportGroup {
+  clave: string;
+  lineas: number;
+  pedidos: number;
+  diasMaxPendiente: number;
+  filas: PendingReportRow[];
+}
+
+export interface PendingReport {
+  agrupar: 'obra' | 'maquina' | 'rubro' | 'fecha';
+  hoy: string;
+  grupos: PendingReportGroup[];
+}
+
+export interface CompanySettings {
+  currency: string;
+  secondaryCurrency: string;
+  taxRate: number;
+  letterheads: Record<string, string>;
+  /** Beneficiario habitual de la reposición de caja chica. */
+  pettyCashSupplierId?: string | null;
 }
 
 // Partes Diarios e Informes de Chofer (Form_PARTE DIARIO, Form_INFORME DIARIO, Form_ENVIO)
@@ -244,46 +173,6 @@ export interface DispatchVoucher {
   chofer: string;
   detalleMateriales: string;
   estado: 'EMITIDO' | 'EN_TRANSITO' | 'ENTREGADO';
-}
-
-// Módulo Financiero / Tesorería (Form_CAJA CHICA, Form_PROVEEDORES A PAGAR, Form_SFONDOS)
-export interface PettyCashExpense {
-  id: string;
-  fecha: string;
-  comprobanteNumero: string;
-  proveedor: string;
-  concepto: string;
-  monto: number;
-  tipoComprobante: 'FACTURA_A' | 'FACTURA_B' | 'RECIBO' | 'VALE';
-  imputacion: 'REPUESTOS' | 'COMBUSTIBLE' | 'VIATICOS' | 'FERRETERIA' | 'OTROS';
-  codmaqAsignado?: string;
-}
-
-export interface SupplierAccount {
-  id: string;
-  codigoProveedor: string;
-  nombreProveedor: string;
-  cuit: string;
-  saldoPendiente: number;
-  facturasPendientes: number;
-  condicionPago: string;
-  ultimoPagoFecha?: string;
-}
-
-export type Supplier = SupplierAccount;
-
-export interface FundRequest {
-  id: string;
-  numeroSolicitud: string; // SF #
-  fecha: string;
-  proveedor: string;
-  monto: number;
-  concepto: string;
-  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'PAGADA';
-  esTubular?: boolean; // Para Form_SOLIC DE FONDOS PEND TUBULAR
-  codmaq?: string;
-  autorizadoPor?: string;
-  fechaPagoEstimada?: string;
 }
 
 // Configuración de Reporte para el Report Viewer (DoCmd.OpenReport, DoCmd.OutputTo, DoCmd.SendObject)
@@ -319,16 +208,4 @@ export interface DocTypeItem {
   codigo: string;
   descripcion: string;
   letra?: string;
-}
-
-export interface StockMovementItem {
-  id: string;
-  fecha: string;
-  articuloCodigo: string;
-  descripcion?: string;
-  tipoMovimiento: 'ENTRADA' | 'SALIDA';
-  cantidad: number;
-  codmaqDestino?: string;
-  nroRemito?: string;
-  observaciones?: string;
 }

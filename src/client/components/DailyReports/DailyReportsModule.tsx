@@ -1,333 +1,534 @@
 /**
  * @file components/DailyReports/DailyReportsModule.tsx
- * @description Migración de Form_PARTE DIARIO, Form_INFORME DIARIO y Form_ENVIO.
- *
- * Mapeo de eventos VBA:
- * - Cuadro_combinado92_AfterUpdate() -> Búsqueda con rs.FindFirst por [CHOFER]
- * - Command24_Click() -> DoCmd.GoToRecord , , acNewRec (Nuevo Parte Diario)
- * - Comando36_Click() -> DoCmd.GoToRecord , , acNext (Siguiente Comprobante Envíos)
+ * @description Partes diarios de eventos del taller (reemplazan PARTE DIARIO e INFORME DIARIO
+ * del Access). Carga rápida en grilla: la fecha, obra y operador se repiten en cada fila nueva,
+ * y las etiquetas se escriben separadas por coma. Incluye el parte del día imprimible y un
+ * resumen por fecha, máquina o tipo con exportación a Excel.
  */
 
-import React, { useEffect, useState } from 'react';
-import {
-  Calendar,
-  Check,
-  Clock,
-  FileSpreadsheet,
-  Fuel,
-  Navigation,
-  Plus,
-  Save,
-  Search,
-  Send,
-  Truck,
-  User,
-} from 'lucide-react';
-import { ErpApi } from '../../services/api';
-import { DailyReport, Machine } from '../../../shared/erp';
-import { formatHours } from '../../utils/legacyCalculations';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ClipboardList, Download, Plus, Printer, Save, Trash2 } from 'lucide-react';
+import { EVENT_TYPE_LABEL, type EventType } from '../../../shared/fleet';
+import { describeError } from '../../services/http';
+import { eventsApi, type EventDto, type EventDraft, type EventFilters, type EventReportGroup } from '../../services/eventsApi';
+import { fleetApi, type FleetMachine } from '../../services/fleetApi';
+import { mastersApi, type Worksite } from '../../services/mastersApi';
+import { printArea } from '../../utils/print';
+import { exportRowsToExcel } from '../../utils/excel';
+import { formatDate, formatQty, todayIso } from '../../utils/format';
+import { Button, Card, EmptyState, Field, Page, PageHeader, cx, inputClass } from '../../ui';
+
+const TYPES = Object.keys(EVENT_TYPE_LABEL) as EventType[];
+
+/** «filtros, aceites» → [FILTROS, ACEITES]. Acepta la etiqueta visible o el código. */
+export function parseTags(text: string): { tipos: EventType[]; desconocidas: string[] } {
+  const byLabel = new Map(TYPES.map((t) => [EVENT_TYPE_LABEL[t].toLowerCase(), t]));
+  const tipos = new Set<EventType>();
+  const desconocidas: string[] = [];
+  for (const raw of text.split(',').map((s) => s.trim()).filter(Boolean)) {
+    const found = byLabel.get(raw.toLowerCase()) ?? (TYPES.includes(raw.toUpperCase() as EventType) ? (raw.toUpperCase() as EventType) : undefined);
+    if (found) tipos.add(found);
+    else desconocidas.push(raw);
+  }
+  return { tipos: [...tipos], desconocidas };
+}
+
+interface GridRow {
+  machineId: string;
+  descripcion: string;
+  etiquetas: string;
+  lectura: string;
+}
+
+const emptyRow = (): GridRow => ({ machineId: '', descripcion: '', etiquetas: '', lectura: '' });
 
 export const DailyReportsModule: React.FC = () => {
-  const [reports, setReports] = useState<DailyReport[]>([]);
-  const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
-
-  // Filtro de búsqueda por Chofer (Cuadro combinado 92)
-  const [selectedChofer, setSelectedChofer] = useState<string>('');
+  const [tab, setTab] = useState<'PARTES' | 'CARGA' | 'RESUMEN'>('PARTES');
+  const [machines, setMachines] = useState<FleetMachine[]>([]);
+  const [worksites, setWorksites] = useState<Worksite[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    Promise.all([fleetApi.list({}), mastersApi.worksites()])
+      .then(([m, w]) => {
+        setMachines(m);
+        setWorksites(w);
+      })
+      .catch((err) => setError(describeError(err)));
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  return (
+    <Page>
+      <PageHeader
+        title="Partes diarios"
+        help="Un parte por evento: envíos, traslados, filtros, cubiertas… Una lectura de horómetro en el parte se valida igual que en Flota."
+        actions={
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-sm">
+            {(['PARTES', 'CARGA', 'RESUMEN'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cx(
+                  'whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition',
+                  tab === t ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                {t === 'PARTES' ? 'Partes' : t === 'CARGA' ? 'Carga rápida' : 'Resumen'}
+              </button>
+            ))}
+          </div>
+        }
+      />
+
+      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+
+      {tab === 'PARTES' && <PartesList machines={machines} worksites={worksites} />}
+      {tab === 'CARGA' && <CargaRapida machines={machines} worksites={worksites} onSaved={() => setTab('PARTES')} />}
+      {tab === 'RESUMEN' && <Resumen machines={machines} />}
+    </Page>
+  );
+};
+
+/* ─── Lista de partes ──────────────────────────────────────────────────── */
+
+const PartesList: React.FC<{ machines: FleetMachine[]; worksites: Worksite[] }> = ({ machines }) => {
+  const [filters, setFilters] = useState<EventFilters>({ desde: todayIso(), hasta: todayIso() });
+  const [events, setEvents] = useState<EventDto[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    setError(null);
+    eventsApi
+      .list(filters)
+      .then(setEvents)
+      .catch((err) => setError(describeError(err)));
+  }, [filters, reloadKey]);
+
+  useEffect(() => {
+    if (!printing) return;
+    const restore = printArea();
+    setPrinting(false);
+    return restore;
+  }, [printing]);
+
+  const setFilter = <K extends keyof EventFilters>(key: K, value: EventFilters[K] | '') =>
+    setFilters((prev) => ({ ...prev, [key]: value === '' ? undefined : value }));
+
+  const anular = async (ev: EventDto) => {
+    if (!window.confirm(`¿Anular el parte de ${ev.machine.codigo}? Queda registrado como anulado.`)) return;
     try {
-      const [repList, machList] = await Promise.all([ErpApi.getDailyReports(), ErpApi.getMachines()]);
-      setReports(repList);
-      setMachines(machList);
-      if (repList.length > 0) {
-        setSelectedReport(repList[0]);
-      }
+      await eventsApi.anular(ev.id);
+      setReloadKey((k) => k + 1);
     } catch (err) {
-      console.error('Error cargando partes diarios:', err);
-    } finally {
-      setLoading(false);
+      setError(describeError(err));
     }
   };
-
-  // Reemplazo de Cuadro_combinado92_AfterUpdate():
-  // rs.FindFirst "[CHOFER] = '" & Me![Cuadro combinado92] & "'"
-  const handleSelectChofer = (chofer: string) => {
-    setSelectedChofer(chofer);
-    if (!chofer) {
-      if (reports.length > 0) setSelectedReport(reports[0]);
-      return;
-    }
-    const found = reports.find((r) => r.chofer.toLowerCase() === chofer.toLowerCase());
-    if (found) {
-      setSelectedReport(found);
-    }
-  };
-
-  // Reemplazo de Command24_Click(): DoCmd.GoToRecord , , acNewRec
-  const handleCreateNewReport = () => {
-    const defaultM = machines.length > 0 ? machines[0] : null;
-    const currentHrs = defaultM ? defaultM.horasActuales : 4800;
-
-    const newRec: DailyReport = {
-      id: `dr-${Date.now()}`,
-      fecha: new Date().toISOString().split('T')[0],
-      chofer: selectedChofer || 'Gómez Raúl',
-      codmaq: defaultM ? defaultM.codmaq : 'CAT-416',
-      horasInicio: currentHrs,
-      horasFin: currentHrs + 8,
-      horasTrabajadas: 8,
-      combustibleCargado: 90,
-      lugarTrabajo: 'Frente de Obra Sector Central',
-      tareaRealizada: 'Operaciones diarias habituales de movimiento de suelo.',
-      novedadesMecanicas: 'Equipo en condiciones óptimas.',
-    };
-
-    setReports([newRec, ...reports]);
-    setSelectedReport(newRec);
-  };
-
-  // Actualización de horas con cálculo automático en AfterUpdate
-  const handleHorasChange = (type: 'inicio' | 'fin', val: number) => {
-    if (!selectedReport) return;
-    const inicio = type === 'inicio' ? val : selectedReport.horasInicio;
-    const fin = type === 'fin' ? val : selectedReport.horasFin;
-    const trabajadas = Math.max(0, fin - inicio);
-
-    setSelectedReport({
-      ...selectedReport,
-      horasInicio: inicio,
-      horasFin: fin,
-      horasTrabajadas: trabajadas,
-    });
-  };
-
-  // Guardar cambios en el parte diario
-  const handleSaveReport = async () => {
-    if (!selectedReport) return;
-    try {
-      const updated = reports.map((r) => (r.id === selectedReport.id ? selectedReport : r));
-      setReports(updated);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2000);
-    } catch (err) {
-      console.error('Error guardando parte:', err);
-    }
-  };
-
-  // Lista única de choferes registrados para el combo
-  const uniqueChoferes = Array.from(new Set(reports.map((r) => r.chofer)));
-
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-slate-500">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-3"></div>
-        Cargando partes diarios y remitos de envío...
-      </div>
-    );
-  }
 
   return (
-    <div id="daily-reports-container" className="space-y-6">
-      {/* Barra de Acciones y Búsqueda por Chofer */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        {/* Cuadro combinado 92 */}
-        <div className="flex items-center space-x-3">
-          <label htmlFor="combo-chofer" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Buscar por chofer:
+    <>
+      <Card padded={false}>
+        <div className="flex flex-wrap items-end gap-3 p-4">
+          <Field label="Desde">
+            <input type="date" className={inputClass} value={filters.desde ?? ''} onChange={(e) => setFilter('desde', e.target.value)} />
+          </Field>
+          <Field label="Hasta">
+            <input type="date" className={inputClass} value={filters.hasta ?? ''} onChange={(e) => setFilter('hasta', e.target.value)} />
+          </Field>
+          <Field label="Máquina">
+            <select className={inputClass} value={filters.maquina ?? ''} onChange={(e) => setFilter('maquina', e.target.value)}>
+              <option value="">Todas</option>
+              {machines.map((m) => (
+                <option key={m.id} value={m.id}>{m.codigo} · {m.descripcion}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Tipo">
+            <select className={inputClass} value={filters.tipo ?? ''} onChange={(e) => setFilter('tipo', e.target.value as EventType)}>
+              <option value="">Todos</option>
+              {TYPES.map((t) => (
+                <option key={t} value={t}>{EVENT_TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Buscar">
+            <input className={inputClass} placeholder="Texto del parte" value={filters.q ?? ''} onChange={(e) => setFilter('q', e.target.value)} />
+          </Field>
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+            <input type="checkbox" checked={filters.sinEnvioNiTraslado === true} onChange={(e) => setFilter('sinEnvioNiTraslado', e.target.checked ? true : undefined)} />
+            Sin envíos ni traslados
           </label>
-          <select
-            id="combo-chofer"
-            value={selectedChofer}
-            onChange={(e) => handleSelectChofer(e.target.value)}
-            className="bg-slate-50 border border-slate-300 text-slate-900 text-xs rounded-lg p-2 font-bold"
-          >
-            <option value="">Seleccionar Chofer u Operador...</option>
-            {uniqueChoferes.map((ch) => (
-              <option key={ch} value={ch}>
-                {ch}
-              </option>
-            ))}
-          </select>
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+            <input type="checkbox" checked={filters.sinNotaDeEnvio === true} onChange={(e) => setFilter('sinNotaDeEnvio', e.target.checked ? true : undefined)} />
+            Envíos sin nota
+          </label>
+          <div className="ml-auto">
+            <Button variant="secondary" icon={<Printer className="h-4 w-4" />} disabled={!events?.length} onClick={() => setPrinting(true)}>
+              Imprimir día
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          {/* Command24_Click -> acNewRec */}
-          <button
-            id="btn-new-daily-report"
-            onClick={handleCreateNewReport}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors"
+        {error && <div className="px-4 pb-3 text-sm text-rose-700">{error}</div>}
 
-          >
-            <Plus className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-            Nuevo parte
-          </button>
-
-          <button
-            id="btn-save-daily-report"
-            onClick={handleSaveReport}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors"
-          >
-            {savedSuccess ? (
-              <>
-                <Check className="w-3.5 h-3.5 mr-1" />
-                Guardado
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5 mr-1" />
-                Guardar Parte
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Detalle del Parte Diario e Informes */}
-      <div className="grid grid-cols-1 gap-6">
-        {selectedReport ? (
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-6">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="bg-blue-50 text-blue-800 border border-blue-200 font-mono text-xs font-bold px-2.5 py-0.5 rounded-md">
-                    {selectedReport.fecha}
-                  </span>
-                  <h2 className="text-lg font-bold text-slate-800">
-                    Parte Diario de Trabajo y Combustible
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Operador: <span className="font-bold text-slate-700">{selectedReport.chofer}</span> | Equipo: <span className="font-bold text-blue-700">{selectedReport.codmaq}</span>
-                </p>
-              </div>
-
-              <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-right">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                  Horas Jornada
-                </span>
-                <span className="text-lg font-black font-mono text-blue-700">
-                  {selectedReport.horasTrabajadas.toFixed(1)} hs
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Chofer / Maquinista</label>
-                <input
-                  type="text"
-                  value={selectedReport.chofer}
-                  onChange={(e) => setSelectedReport({ ...selectedReport, chofer: e.target.value })}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Máquina Asignada</label>
-                <select
-                  value={selectedReport.codmaq}
-                  onChange={(e) => setSelectedReport({ ...selectedReport, codmaq: e.target.value })}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-semibold"
-                >
-                  {machines.map((m) => (
-                    <option key={m.codmaq} value={m.codmaq}>
-                      {m.codmaq} ({m.modelo})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Lugar de Trabajo / Tramo</label>
-                <input
-                  type="text"
-                  value={selectedReport.lugarTrabajo}
-                  onChange={(e) =>
-                    setSelectedReport({ ...selectedReport, lugarTrabajo: e.target.value })
-                  }
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Horómetro Inicial</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={selectedReport.horasInicio}
-                  onChange={(e) => handleHorasChange('inicio', parseFloat(e.target.value) || 0)}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Horómetro Final</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={selectedReport.horasFin}
-                  onChange={(e) => handleHorasChange('fin', parseFloat(e.target.value) || 0)}
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Gasoil Cargado (Litros)</label>
-                <input
-                  type="number"
-                  value={selectedReport.combustibleCargado}
-                  onChange={(e) =>
-                    setSelectedReport({
-                      ...selectedReport,
-                      combustibleCargado: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono font-semibold"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Labor / Tarea Realizada</label>
-              <textarea
-                rows={2}
-                value={selectedReport.tareaRealizada}
-                onChange={(e) =>
-                  setSelectedReport({ ...selectedReport, tareaRealizada: e.target.value })
-                }
-                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Novedades Mecánicas o Inconvenientes
-              </label>
-              <textarea
-                rows={2}
-                value={selectedReport.novedadesMecanicas || ''}
-                onChange={(e) =>
-                  setSelectedReport({ ...selectedReport, novedadesMecanicas: e.target.value })
-                }
-                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2"
-              />
-            </div>
+        {events === null ? (
+          <div className="p-6 text-sm text-slate-500">Cargando partes…</div>
+        ) : events.length === 0 ? (
+          <div className="p-6">
+            <EmptyState icon={<ClipboardList className="h-6 w-6" />} title="No hay partes en este rango" help="Usá la carga rápida para cargar varios de una vez." />
           </div>
         ) : (
-          <div className="lg:col-span-2 bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400">
-            Seleccione un chofer para visualizar el parte operativo.
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Fecha</th>
+                  <th className="px-4 py-2.5">Máquina</th>
+                  <th className="px-4 py-2.5">Descripción</th>
+                  <th className="px-4 py-2.5">Etiquetas</th>
+                  <th className="px-4 py-2.5">Obra destino</th>
+                  <th className="px-4 py-2.5">Nota a obra</th>
+                  <th className="px-4 py-2.5 text-right">Lectura</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {events.map((ev) => (
+                  <tr key={ev.id} className={cx(ev.anulado && 'text-slate-400 line-through')}>
+                    <td className="px-4 py-2.5">{formatDate(ev.fecha)}</td>
+                    <td className="px-4 py-2.5 font-mono">{ev.machine.codigo}</td>
+                    <td className="px-4 py-2.5">{ev.descripcion}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {ev.tipos.map((t) => (
+                          <span key={t} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">{EVENT_TYPE_LABEL[t]}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">{ev.worksite?.nombre ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      {ev.siteDispatchNote ? (
+                        <span className="font-mono text-xs">N.º {ev.siteDispatchNote.numero}</span>
+                      ) : ev.tipos.includes('ENVIO_REPUESTOS') && !ev.anulado ? (
+                        <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800">Sin nota</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">{ev.lectura ? `${formatQty(ev.lectura.valor)} ${ev.lectura.unidad.toLowerCase()}` : '—'}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      {!ev.anulado && (
+                        <button type="button" onClick={() => anular(ev)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Anular parte">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+      </Card>
 
+      {printing && events && <PrintableDay events={events} fecha={filters.desde ?? todayIso()} />}
+    </>
+  );
+};
+
+function PrintableDay({ events, fecha }: { events: EventDto[]; fecha: string }) {
+  const activos = events.filter((e) => !e.anulado);
+  return (
+    <div className="print-area text-sm text-black">
+      <div className="mb-4 border-b border-black pb-2">
+        <div className="text-lg font-bold">Partes diarios · {formatDate(fecha)}</div>
+        <div>{activos.length} partes</div>
       </div>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="border-b border-black text-left">
+            <th className="py-1">Máquina</th>
+            <th className="py-1">Descripción</th>
+            <th className="py-1">Etiquetas</th>
+            <th className="py-1">Obra destino</th>
+            <th className="py-1 text-right">Lectura</th>
+          </tr>
+        </thead>
+        <tbody>
+          {activos.map((e) => (
+            <tr key={e.id} className="border-b border-slate-300">
+              <td className="py-1 font-mono">{e.machine.codigo}</td>
+              <td className="py-1">{e.descripcion}</td>
+              <td className="py-1">{e.tipos.map((t) => EVENT_TYPE_LABEL[t]).join(', ')}</td>
+              <td className="py-1">{e.worksite?.nombre ?? ''}</td>
+              <td className="py-1 text-right">{e.lectura ? formatQty(e.lectura.valor) : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+  );
+}
+
+/* ─── Carga rápida en grilla ───────────────────────────────────────────── */
+
+const CargaRapida: React.FC<{ machines: FleetMachine[]; worksites: Worksite[]; onSaved: () => void }> = ({ machines, worksites, onSaved }) => {
+  const [fecha, setFecha] = useState(todayIso());
+  const [worksiteId, setWorksiteId] = useState('');
+  const [operador, setOperador] = useState('');
+  const [rows, setRows] = useState<GridRow[]>([emptyRow(), emptyRow(), emptyRow()]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const machineByCode = useMemo(() => new Map(machines.map((m) => [m.codigo, m.id])), [machines]);
+
+  const patchRow = (i: number, changes: Partial<GridRow>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...changes } : r)));
+
+  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+
+  const removeRow = (i: number) => setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+
+  const onDescriptionKey = (e: React.KeyboardEvent, i: number) => {
+    if (e.key === 'Enter' && i === rows.length - 1) {
+      e.preventDefault();
+      addRow();
+    }
+  };
+
+  const save = async () => {
+    const used = rows.map((r, i) => ({ r, i })).filter(({ r }) => r.machineId || r.descripcion.trim());
+    const local: string[] = [];
+    const drafts: EventDraft[] = [];
+    for (const { r, i } of used) {
+      if (!r.machineId) local.push(`Fila ${i + 1}: falta la máquina.`);
+      if (!r.descripcion.trim()) local.push(`Fila ${i + 1}: falta la descripción.`);
+      const { tipos, desconocidas } = parseTags(r.etiquetas);
+      if (desconocidas.length > 0) local.push(`Fila ${i + 1}: etiqueta no reconocida «${desconocidas.join(', ')}».`);
+      const valor = r.lectura.trim() === '' ? null : Number(r.lectura);
+      if (valor !== null && !Number.isFinite(valor)) local.push(`Fila ${i + 1}: la lectura no es un número.`);
+      drafts.push({
+        fecha,
+        machineId: r.machineId,
+        descripcion: r.descripcion.trim(),
+        tipos,
+        worksiteId: worksiteId || null,
+        operador: operador || null,
+        lectura: valor === null ? null : { valor },
+      });
+    }
+    if (drafts.length === 0) local.push('No hay partes para guardar.');
+    if (local.length > 0) {
+      setErrors(local);
+      return;
+    }
+    setSaving(true);
+    setErrors([]);
+    try {
+      await eventsApi.createBatch(drafts);
+      onSaved();
+    } catch (err) {
+      const rechazados = (err as { rechazados?: { indice: number; errores: string[] }[] }).rechazados;
+      if (rechazados) {
+        setErrors([
+          'Ningún parte se guardó. Corregí estas filas y volvé a guardar:',
+          ...rechazados.map((r) => `Fila ${used[r.indice]?.i + 1 || r.indice + 1}: ${r.errores.join(' ')}`),
+        ]);
+      } else {
+        setErrors([describeError(err)]);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="Carga rápida" action={<span className="text-xs text-slate-500">Enter en la última fila agrega otra</span>}>
+      <div className="mb-4 grid gap-3 sm:grid-cols-4">
+        <Field label="Fecha (se repite)">
+          <input type="date" className={inputClass} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        </Field>
+        <Field label="Obra destino (se repite)">
+          <select className={inputClass} value={worksiteId} onChange={(e) => setWorksiteId(e.target.value)}>
+            <option value="">Sin obra</option>
+            {worksites.map((w) => (
+              <option key={w.id} value={w.id}>{w.nombre}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Operador (se repite)">
+          <input className={inputClass} value={operador} onChange={(e) => setOperador(e.target.value)} />
+        </Field>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-2 py-2">Máquina</th>
+              <th className="px-2 py-2">Descripción</th>
+              <th className="px-2 py-2">Etiquetas</th>
+              <th className="px-2 py-2 w-28">Lectura</th>
+              <th className="px-2 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className="px-2 py-1.5">
+                  <input
+                    list="maquinas-codigos"
+                    className={inputClass}
+                    placeholder="Código"
+                    value={machines.find((m) => m.id === r.machineId)?.codigo ?? ''}
+                    onChange={(e) => patchRow(i, { machineId: machineByCode.get(e.target.value.trim().toUpperCase()) ?? '' })}
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    className={inputClass}
+                    value={r.descripcion}
+                    onChange={(e) => patchRow(i, { descripcion: e.target.value })}
+                    onKeyDown={(e) => onDescriptionKey(e, i)}
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    list="etiquetas-partes"
+                    className={inputClass}
+                    placeholder="Filtros, Aceites"
+                    value={r.etiquetas}
+                    onChange={(e) => patchRow(i, { etiquetas: e.target.value })}
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input type="number" step="any" min="0" className={cx(inputClass, 'text-right')} value={r.lectura} onChange={(e) => patchRow(i, { lectura: e.target.value })} />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <button type="button" onClick={() => removeRow(i)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Quitar fila">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <datalist id="maquinas-codigos">
+        {machines.map((m) => (
+          <option key={m.id} value={m.codigo}>{m.descripcion}</option>
+        ))}
+      </datalist>
+      <datalist id="etiquetas-partes">
+        {TYPES.map((t) => (
+          <option key={t} value={EVENT_TYPE_LABEL[t]} />
+        ))}
+      </datalist>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={addRow}>Agregar fila</Button>
+        <Button variant="primary" icon={<Save className="h-4 w-4" />} onClick={save} disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar todos los partes'}
+        </Button>
+      </div>
+
+      {errors.length > 0 && (
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errors.map((e) => (
+            <div key={e}>{e}</div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+/* ─── Resumen ──────────────────────────────────────────────────────────── */
+
+const Resumen: React.FC<{ machines: FleetMachine[] }> = () => {
+  const [agrupar, setAgrupar] = useState<'fecha' | 'maquina' | 'tipo'>('tipo');
+  const [desde, setDesde] = useState(todayIso().slice(0, 8) + '01');
+  const [hasta, setHasta] = useState(todayIso());
+  const [groups, setGroups] = useState<EventReportGroup[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+    eventsApi
+      .report(agrupar, { desde, hasta })
+      .then((r) => setGroups(r.grupos))
+      .catch((err) => setError(describeError(err)));
+  }, [agrupar, desde, hasta]);
+
+  const exportar = () => {
+    if (!groups) return;
+    const rows = groups.flatMap((g) =>
+      g.filas.map((f) => ({
+        Grupo: g.clave,
+        Fecha: formatDate(f.fecha),
+        Máquina: f.machine.codigo,
+        Descripción: f.descripcion,
+        Etiquetas: f.tipos.map((t) => EVENT_TYPE_LABEL[t]).join(', '),
+        'Obra destino': f.worksite?.nombre ?? '',
+        Operador: f.operador ?? '',
+        Lectura: f.lectura?.valor ?? null,
+      })),
+    );
+    exportRowsToExcel(rows, 'Partes', `partes-${agrupar}-${desde}-${hasta}.xlsx`);
+  };
+
+  return (
+    <Card padded={false}>
+      <div className="flex flex-wrap items-end gap-3 p-4">
+        <Field label="Agrupar por">
+          <select className={inputClass} value={agrupar} onChange={(e) => setAgrupar(e.target.value as typeof agrupar)}>
+            <option value="tipo">Tipo</option>
+            <option value="maquina">Máquina</option>
+            <option value="fecha">Fecha</option>
+          </select>
+        </Field>
+        <Field label="Desde">
+          <input type="date" className={inputClass} value={desde} onChange={(e) => setDesde(e.target.value)} />
+        </Field>
+        <Field label="Hasta">
+          <input type="date" className={inputClass} value={hasta} onChange={(e) => setHasta(e.target.value)} />
+        </Field>
+        <div className="ml-auto">
+          <Button variant="secondary" icon={<Download className="h-4 w-4" />} disabled={!groups?.length} onClick={exportar}>
+            Exportar a Excel
+          </Button>
+        </div>
+      </div>
+      {error && <div className="px-4 pb-3 text-sm text-rose-700">{error}</div>}
+      {groups === null ? (
+        <div className="p-6 text-sm text-slate-500">Calculando…</div>
+      ) : groups.length === 0 ? (
+        <div className="p-6 text-sm text-slate-500">Sin partes en este rango.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5">Grupo</th>
+                <th className="px-4 py-2.5 text-right">Partes</th>
+                <th className="px-4 py-2.5 text-right">Máquinas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {groups.map((g) => (
+                <tr key={g.clave}>
+                  <td className="px-4 py-2.5">{g.clave}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{g.partes}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{g.maquinas}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 };

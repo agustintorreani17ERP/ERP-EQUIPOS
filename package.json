@@ -13,7 +13,9 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "import:access": "tsx scripts/import-access.ts",
+    "sembrar:numeracion": "tsx scripts/sembrar-numeracion-erp.ts"
   },
   "dependencies": {
     "@clerk/backend": "^3.23.2",
@@ -24,6 +26,7 @@
     "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
+    "mdb-reader": "^3.2.0",
     "motion": "^12.23.24",
     "pg": "^8.23.1",
     "react": "^19.0.1",
